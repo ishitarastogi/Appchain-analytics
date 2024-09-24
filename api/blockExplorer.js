@@ -1,4 +1,3 @@
-// /api/blockExplorer.js
 import axios from "axios";
 
 export default async function handler(req, res) {
@@ -18,7 +17,7 @@ export default async function handler(req, res) {
     // Fetch data from the external API using axios
     const response = await axios.get(url);
 
-    console.log(`Received response: ${JSON.stringify(response.data)}`); // Log the response data
+    console.log("Received response from external API:", response.data); // Log the response data from the external API
 
     // Send the data back to the client
     res.status(200).json(response.data);
@@ -26,8 +25,10 @@ export default async function handler(req, res) {
     console.error("Error fetching data:", error.message);
 
     if (error.response) {
+      // Log the status and error response data from the external API
       console.error("Error response status:", error.response.status);
       console.error("Error response data:", error.response.data);
+
       return res.status(error.response.status).json(error.response.data);
     } else {
       return res
