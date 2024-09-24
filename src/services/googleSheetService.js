@@ -36,28 +36,38 @@ export const fetchGoogleSheetData = async () => {
 // /src/services/googleSheetService.js
 // /src/services/googleSheetService.js
 
+// /src/services/googleSheetService.js
+
 export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
-  const currentDate = new Date().toISOString().split("T")[0];
+  // Ensure dates are properly formatted as YYYY-MM-DD
+  const formattedLaunchDate = new Date(launchDate).toISOString().split("T")[0]; // Converts 'Jun 1, 2024' to '2024-06-01'
+  const currentDate = new Date().toISOString().split("T")[0]; // Get current date in YYYY-MM-DD format
+
   const transactionsApiUrl = `${blockScoutUrl.replace(
     /\/$/,
     ""
-  )}/api/v1/lines/newTxns?from=${launchDate}&to=${currentDate}`;
+  )}/api/v1/lines/newTxns?from=${formattedLaunchDate}&to=${currentDate}`;
   const activeAccountsApiUrl = `${blockScoutUrl.replace(
     /\/$/,
     ""
-  )}/api/v1/lines/activeAccounts?from=${launchDate}&to=${currentDate}`;
+  )}/api/v1/lines/activeAccounts?from=${formattedLaunchDate}&to=${currentDate}`;
+
+  // Log the generated URLs for debugging
+  console.log("Generated transactions API URL:", transactionsApiUrl);
+  console.log("Generated active accounts API URL:", activeAccountsApiUrl);
 
   try {
-    // Call the Vercel proxy for the transactions API
+    // Use the Vercel proxy for transactions API
     const transactionsResponse = await axios.get(
       `/api/blockExplorer?url=${encodeURIComponent(transactionsApiUrl)}`
     );
 
-    // Call the Vercel proxy for the active accounts API
+    // Use the Vercel proxy for active accounts API
     const activeAccountsResponse = await axios.get(
       `/api/blockExplorer?url=${encodeURIComponent(activeAccountsApiUrl)}`
     );
 
+    // Return the processed data
     return {
       transactions: transactionsResponse.data.chart.map((item) => ({
         date: item.date,

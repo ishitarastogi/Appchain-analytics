@@ -1,4 +1,5 @@
 // /src/App.js
+
 import React, { useEffect, useState } from "react";
 import "./App.css";
 import {
@@ -24,11 +25,14 @@ function App() {
         // Optionally: Fetch block explorer data for the first entry
         if (sheetData.length > 0) {
           const firstEntry = sheetData[0]; // Get the first row
+          console.log("First entry from Google Sheets:", firstEntry);
+
           if (firstEntry.blockScoutUrl && firstEntry.launchDate) {
             const blockData = await fetchBlockExplorerData(
               firstEntry.blockScoutUrl,
               firstEntry.launchDate
             );
+            console.log("Block Explorer Data:", blockData); // Log the fetched block explorer data
             setBlockExplorerData(blockData);
           }
         }
