@@ -34,6 +34,7 @@ export const fetchGoogleSheetData = async () => {
 
 // Fetch Block Explorer Data for a single chain (transactions and active accounts)
 // /src/services/googleSheetService.js
+// /src/services/googleSheetService.js
 
 export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
   const currentDate = new Date().toISOString().split("T")[0];
@@ -47,12 +48,12 @@ export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
   )}/api/v1/lines/activeAccounts?from=${launchDate}&to=${currentDate}`;
 
   try {
-    // Use the Vercel proxy for transactions API
+    // Call the Vercel proxy for the transactions API
     const transactionsResponse = await axios.get(
       `/api/blockExplorer?url=${encodeURIComponent(transactionsApiUrl)}`
     );
 
-    // Use the Vercel proxy for active accounts API
+    // Call the Vercel proxy for the active accounts API
     const activeAccountsResponse = await axios.get(
       `/api/blockExplorer?url=${encodeURIComponent(activeAccountsApiUrl)}`
     );
