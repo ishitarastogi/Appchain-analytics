@@ -1,0 +1,19 @@
+.sidebar {
+  width: 200px;
+  height: 100vh;
+  background-color: #222;
+  color: white;
+  padding: 20px;
+  position: fixed;
+}
+
+.sidebar ul {
+  list-style-type: none;
+  padding: 0;
+}
+
+.sidebar li {
+  padding: 10px 0;
+  cursor: pointer;
+  color: #ff3b57; /* Highlight the active category */
+}
