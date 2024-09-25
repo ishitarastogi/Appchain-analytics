@@ -61,7 +61,7 @@ export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
       `${proxyBaseUrl}${transactionsApiUrl}`
     );
 
-    console.log("Fetched Transactions Data:", transactionsResponse.data); // <-- Log transactions
+    console.log("Fetched Transactions n Data:", transactionsResponse.data); // <-- Log transactions
 
     return {
       transactions: transactionsResponse.data.chart.map((item) => ({
