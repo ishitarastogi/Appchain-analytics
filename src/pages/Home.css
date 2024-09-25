@@ -1,0 +1,35 @@
+/* src/MainContent/Charts/LaunchTimelineChart.css */
+
+.chart-container {
+  background-color: #000000; /* Black background */
+  width: 100%;
+  max-width: 1200px; /* Increased width */
+  height: 600px; /* Increased height for more space */
+  margin: 0 auto;
+  padding: 10px;
+  border-radius: 8px;
+}
+
+.chart-wrapper {
+  height: calc(100% - 50px); /* Adjust for the height of buttons */
+}
+
+.time-range-buttons {
+  text-align: right;
+  margin-bottom: 10px;
+}
+
+.time-range-buttons button {
+  margin-left: 5px;
+  padding: 6px 12px;
+  background-color: #333333;
+  color: #ffffff;
+  border: none;
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.time-range-buttons button.active,
+.time-range-buttons button:hover {
+  background-color: #555555;
+}
