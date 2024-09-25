@@ -3,32 +3,27 @@ import axios from "axios";
 export default async function handler(req, res) {
   const { url } = req.query;
 
-  // Log the URL received in the serverless function
-  console.log("Received request to proxy this URL:", url);
+  // Log the URL to check if it's being received correctly
+  console.log("Received URL in serverless function:", url);
 
   if (!url) {
-    console.log("Missing URL parameter");
     return res.status(400).json({ error: "Missing URL parameter" });
   }
 
   try {
-    console.log(`Fetching from external URL: ${url}`); // Log the external URL being requested
-
-    // Fetch data from the external API using axios
+    // Make the request to the external API
     const response = await axios.get(url);
 
-    console.log("Received response from external API:", response.data); // Log the response data from the external API
+    // Log the response from the external API
+    console.log("Received response from external API:", response.data);
 
-    // Send the data back to the client
+    // Return the response data to the client
     res.status(200).json(response.data);
   } catch (error) {
-    console.error("Error fetching data:", error.message);
+    console.error("Error fetching data from external API:", error.message);
 
     if (error.response) {
-      // Log the status and error response data from the external API
-      console.error("Error response status:", error.response.status);
-      console.error("Error response data:", error.response.data);
-
+      // Return the error response from the external API
       return res.status(error.response.status).json(error.response.data);
     } else {
       return res
