@@ -1,4 +1,3 @@
-// /src/services/googleSheetService.js
 import axios from "axios";
 import moment from "moment";
 
@@ -9,6 +8,8 @@ export const fetchGoogleSheetData = async () => {
   try {
     const response = await axios.get(GOOGLE_SHEET_URL);
     const rows = response.data.values;
+
+    console.log("Fetched Google Sheets Data:", rows); // <-- Check Google Sheets data
 
     return rows.map((row) => ({
       name: row[0], // Column A: Name
@@ -45,11 +46,7 @@ export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
   const transactionsApiUrl = encodeURIComponent(
     `${normalizedUrl}/api/v1/lines/newTxns?from=${formattedLaunchDate}&to=${currentDate}`
   );
-  const activeAccountsApiUrl = encodeURIComponent(
-    `${normalizedUrl}/api/v1/lines/activeAccounts?from=${formattedLaunchDate}&to=${currentDate}`
-  );
 
-  // Determine the proxy base URL based on the environment
   const isDevelopment =
     !process.env.NODE_ENV || process.env.NODE_ENV === "development";
   const proxyBaseUrl = isDevelopment
@@ -57,23 +54,19 @@ export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
     : "/api/proxy?url="; // Production
 
   try {
+    console.log("Fetching Transactions for URL:", transactionsApiUrl); // <-- Check the API URL
+
     // Fetch transactions
     const transactionsResponse = await axios.get(
       `${proxyBaseUrl}${transactionsApiUrl}`
     );
-    // Fetch active accounts
-    const activeAccountsResponse = await axios.get(
-      `${proxyBaseUrl}${activeAccountsApiUrl}`
-    );
+
+    console.log("Fetched Transactions Data:", transactionsResponse.data); // <-- Log transactions
 
     return {
       transactions: transactionsResponse.data.chart.map((item) => ({
         date: item.date,
-        value: item.value,
-      })),
-      activeAccounts: activeAccountsResponse.data.chart.map((item) => ({
-        date: item.date,
-        value: item.value,
+        value: parseInt(item.value, 10),
       })),
     };
   } catch (error) {
@@ -83,4 +76,52 @@ export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
     );
     throw error;
   }
+};
+
+// Function to calculate weekly transactions across all chains and filter for the last month
+export const fetchAllTransactions = async (sheetData) => {
+  const transactionDataByWeek = {};
+  let totalTransactionsCombined = 0;
+  const lastMonth = moment().subtract(1, "months"); // Get the last month date
+
+  // Iterate over each chain's data from the sheet
+  for (const chain of sheetData) {
+    const { blockScoutUrl, launchDate, name } = chain;
+    try {
+      const { transactions } = await fetchBlockExplorerData(
+        blockScoutUrl,
+        launchDate
+      );
+
+      console.log(`Transactions for ${name}:`, transactions); // <-- Log transactions for each chain
+
+      // Aggregate transactions by week
+      transactions.forEach(({ date, value }) => {
+        const week = moment(date).startOf("isoWeek").format("YYYY-WW");
+        const transactionDate = moment(date);
+
+        // Consider only transactions from the last month
+        if (transactionDate.isAfter(lastMonth)) {
+          // Sum the transactions for each week across all chains
+          if (!transactionDataByWeek[week]) {
+            transactionDataByWeek[week] = 0;
+          }
+          transactionDataByWeek[week] += value;
+
+          // Increment the total transactions across all chains
+          totalTransactionsCombined += value;
+        }
+      });
+    } catch (error) {
+      console.error(`Error fetching transactions for ${name}:`, error);
+    }
+  }
+
+  console.log("Weekly Transaction Data (Last Month):", transactionDataByWeek); // <-- Log weekly transactions
+  console.log("Total Transactions Combined:", totalTransactionsCombined); // <-- Log total transactions
+
+  return {
+    transactionDataByWeek,
+    totalTransactionsCombined,
+  };
 };
