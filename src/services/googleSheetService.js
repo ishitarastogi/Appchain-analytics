@@ -80,11 +80,31 @@ export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
 
 // Function to calculate weekly transactions across all chains and filter for the last month
 export const fetchAllTransactions = async (sheetData) => {
-  const transactionDataByWeek = {};
   let totalTransactionsCombined = 0;
-  const lastMonth = moment().subtract(1, "months"); // Get the last month date
+  const transactionDataByWeek = {};
+  const transactionsByChain = {};
 
-  // Iterate over each chain's data from the sheet
+  // Extract the logic to safely reference variables within a loop
+  const processTransactionData = (transactions, chainName) => {
+    transactions.forEach(({ date, value }) => {
+      const week = moment(date).startOf("isoWeek").format("YYYY-WW");
+      if (!transactionDataByWeek[week]) {
+        transactionDataByWeek[week] = 0;
+      }
+      transactionDataByWeek[week] += parseInt(value, 10);
+
+      if (!transactionsByChain[chainName]) {
+        transactionsByChain[chainName] = {};
+      }
+      if (!transactionsByChain[chainName][week]) {
+        transactionsByChain[chainName][week] = 0;
+      }
+      transactionsByChain[chainName][week] += parseInt(value, 10);
+
+      totalTransactionsCombined += parseInt(value, 10);
+    });
+  };
+
   for (const chain of sheetData) {
     const { blockScoutUrl, launchDate, name } = chain;
     try {
@@ -92,36 +112,15 @@ export const fetchAllTransactions = async (sheetData) => {
         blockScoutUrl,
         launchDate
       );
-
-      console.log(`Transactions for ${name}:`, transactions); // <-- Log transactions for each chain
-
-      // Aggregate transactions by week
-      transactions.forEach(({ date, value }) => {
-        const week = moment(date).startOf("isoWeek").format("YYYY-WW");
-        const transactionDate = moment(date);
-
-        // Consider only transactions from the last month
-        if (transactionDate.isAfter(lastMonth)) {
-          // Sum the transactions for each week across all chains
-          if (!transactionDataByWeek[week]) {
-            transactionDataByWeek[week] = 0;
-          }
-          transactionDataByWeek[week] += value;
-
-          // Increment the total transactions across all chains
-          totalTransactionsCombined += value;
-        }
-      });
+      processTransactionData(transactions, name);
     } catch (error) {
       console.error(`Error fetching transactions for ${name}:`, error);
     }
   }
 
-  console.log("Weekly Transaction Data (Last Month):", transactionDataByWeek); // <-- Log weekly transactions
-  console.log("Total Transaction Combined:", totalTransactionsCombined); // <-- Log total transactions
-
   return {
     transactionDataByWeek,
+    transactionsByChain,
     totalTransactionsCombined,
   };
 };
