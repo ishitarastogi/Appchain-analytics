@@ -4,8 +4,7 @@ import moment from "moment";
 
 // Fetch Google Sheets Data
 export const fetchGoogleSheetData = async () => {
-  const GOOGLE_SHEET_URL =
-    "https://sheets.googleapis.com/v4/spreadsheets/1z-wz6qNOb2Zs7d3xnPjhl004YhIuov-ecd60JzffaNM/values/Sheet1!A2:Z1000?key=AIzaSyAG8hFaegrHjZ5Wn8D7XmCAh8ydDnuH4WI";
+  const GOOGLE_SHEET_URL = `https://sheets.googleapis.com/v4/spreadsheets/1z-wz6qNOb2Zs7d3xnPjhl004YhIuov-ecd60JzffaNM/values/Sheet1!A2:Z1000?key=${process.env.REACT_APP_GOOGLE_SHEETS_API_KEY}`;
 
   try {
     const response = await axios.get(GOOGLE_SHEET_URL);
@@ -50,8 +49,12 @@ export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
     `${normalizedUrl}/api/v1/lines/activeAccounts?from=${formattedLaunchDate}&to=${currentDate}`
   );
 
-  // Use the Vercel proxy function
-  const proxyBaseUrl = "/api/proxy?url=";
+  // Determine the proxy base URL based on the environment
+  const isDevelopment =
+    !process.env.NODE_ENV || process.env.NODE_ENV === "development";
+  const proxyBaseUrl = isDevelopment
+    ? "http://localhost:3000/api/proxy?url=" // Vercel dev server
+    : "/api/proxy?url="; // Production
 
   try {
     // Fetch transactions
