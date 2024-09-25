@@ -118,7 +118,7 @@ export const fetchAllTransactions = async (sheetData) => {
   }
 
   console.log("Weekly Transaction Data (Last Month):", transactionDataByWeek); // <-- Log weekly transactions
-  console.log("Total Transactions Combined:", totalTransactionsCombined); // <-- Log total transactions
+  console.log("Total Transaction Combined:", totalTransactionsCombined); // <-- Log total transactions
 
   return {
     transactionDataByWeek,
