@@ -1,5 +1,6 @@
 // /src/services/googleSheetService.js
 import axios from "axios";
+import moment from "moment";
 
 // Fetch Google Sheets Data
 export const fetchGoogleSheetData = async () => {
@@ -33,41 +34,35 @@ export const fetchGoogleSheetData = async () => {
 };
 
 // Fetch Block Explorer Data for a single chain (transactions and active accounts)
-// /src/services/googleSheetService.js
-// /src/services/googleSheetService.js
-
-// /src/services/googleSheetService.js
-
 export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
-  // Ensure dates are properly formatted as YYYY-MM-DD
-  const formattedLaunchDate = new Date(launchDate).toISOString().split("T")[0]; // Converts 'Jun 1, 2024' to '2024-06-01'
-  const currentDate = new Date().toISOString().split("T")[0]; // Get current date in YYYY-MM-DD format
+  // Remove any trailing slashes
+  const normalizedUrl = blockScoutUrl.replace(/\/+$/, "");
 
-  const transactionsApiUrl = `${blockScoutUrl.replace(
-    /\/$/,
-    ""
-  )}/api/v1/lines/newTxns?from=${formattedLaunchDate}&to=${currentDate}`;
-  const activeAccountsApiUrl = `${blockScoutUrl.replace(
-    /\/$/,
-    ""
-  )}/api/v1/lines/activeAccounts?from=${formattedLaunchDate}&to=${currentDate}`;
+  // Parse and format the launchDate
+  const formattedLaunchDate = moment(new Date(launchDate)).format("YYYY-MM-DD");
+  const currentDate = moment().format("YYYY-MM-DD");
 
-  // Log the generated URLs for debugging
-  console.log("Generated transactions API URL:", transactionsApiUrl);
-  console.log("Generated active accounts API URL:", activeAccountsApiUrl);
+  // Encode the external API URLs
+  const transactionsApiUrl = encodeURIComponent(
+    `${normalizedUrl}/api/v1/lines/newTxns?from=${formattedLaunchDate}&to=${currentDate}`
+  );
+  const activeAccountsApiUrl = encodeURIComponent(
+    `${normalizedUrl}/api/v1/lines/activeAccounts?from=${formattedLaunchDate}&to=${currentDate}`
+  );
+
+  // Use the Vercel proxy function
+  const proxyBaseUrl = "/api/proxy?url=";
 
   try {
-    // Use the Vercel proxy for transactions API
+    // Fetch transactions
     const transactionsResponse = await axios.get(
-      `/api/blockExplorer?url=${encodeURIComponent(transactionsApiUrl)}`
+      `${proxyBaseUrl}${transactionsApiUrl}`
     );
-
-    // Use the Vercel proxy for active accounts API
+    // Fetch active accounts
     const activeAccountsResponse = await axios.get(
-      `/api/blockExplorer?url=${encodeURIComponent(activeAccountsApiUrl)}`
+      `${proxyBaseUrl}${activeAccountsApiUrl}`
     );
 
-    // Return the processed data
     return {
       transactions: transactionsResponse.data.chart.map((item) => ({
         date: item.date,
@@ -79,7 +74,10 @@ export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
       })),
     };
   } catch (error) {
-    console.error("Error fetching block explorer data:", error.message);
+    console.error(
+      `Error fetching block explorer data for ${normalizedUrl}:`,
+      error.message
+    );
     throw error;
   }
 };

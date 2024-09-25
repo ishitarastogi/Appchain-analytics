@@ -13,31 +13,30 @@ function App() {
     transactions: [],
     activeAccounts: [],
   });
+  const [error, setError] = useState(null);
 
   // Fetch Google Sheets data on component mount
   useEffect(() => {
     const fetchData = async () => {
       try {
         // Fetch all data from the Google Sheet
-        const sheetData = await fetchGoogleSheetData();
-        setSheetData(sheetData);
+        const data = await fetchGoogleSheetData();
+        setSheetData(data);
 
         // Optionally: Fetch block explorer data for the first entry
-        if (sheetData.length > 0) {
-          const firstEntry = sheetData[0]; // Get the first row
-          console.log("First entry from Google Sheets:", firstEntry);
-
+        if (data.length > 0) {
+          const firstEntry = data[0]; // Get the first row
           if (firstEntry.blockScoutUrl && firstEntry.launchDate) {
             const blockData = await fetchBlockExplorerData(
               firstEntry.blockScoutUrl,
               firstEntry.launchDate
             );
-            console.log("Block Explorer Data:", blockData); // Log the fetched block explorer data
             setBlockExplorerData(blockData);
           }
         }
       } catch (error) {
-        console.error("Error fetching data:", error);
+        console.error("Error fetching data:", error.message);
+        setError(error.message);
       }
     };
 
@@ -47,6 +46,8 @@ function App() {
   return (
     <div className="App">
       <h1>Appchain Growth Insights</h1>
+
+      {error && <p style={{ color: "red" }}>Error: {error}</p>}
 
       <div>
         <h2>Google Sheets Data</h2>
