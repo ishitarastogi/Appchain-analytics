@@ -1,3 +1,5 @@
+/* src/components/Home/Home.css */
+
 .home {
   display: flex;
 }
@@ -12,7 +14,12 @@
 
 .content-area {
   padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px; /* Add spacing between components */
 }
+
+/* Existing styles remain unchanged */
 
 /* Styling for LaunchTimelineChart component */
 .chart-container {

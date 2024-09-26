@@ -1,3 +1,5 @@
+// src/components/MainContent/Charts/TransactionMetrics.js
+
 import React, { useState, useEffect } from "react";
 import {
   fetchGoogleSheetData,
@@ -57,92 +59,26 @@ const TransactionMetrics = () => {
   const fetchAndProcessData = async () => {
     try {
       const sheetData = await fetchGoogleSheetData();
-      const { transactionDataByWeek, transactionsByChain } =
-        await fetchAllTransactions(sheetData);
+      const {
+        transactionDataByWeek,
+        transactionsByChain,
+        totalTransactionsCombined,
+      } = await fetchAllTransactions(sheetData);
 
-      const startDate = moment("2023-01-01");
-      const endDate = moment("2024-09-30");
+      processData(
+        transactionDataByWeek,
+        transactionsByChain,
+        totalTransactionsCombined
+      );
 
-      const labels = [];
-      let currentWeek = startDate.clone().startOf("isoWeek");
-      while (currentWeek.isBefore(endDate)) {
-        labels.push(currentWeek.format("YYYY-MM-DD"));
-        currentWeek.add(1, "week");
-      }
-
-      const totalData = labels.map((label) => {
-        const weekKey = moment(label).startOf("isoWeek").format("YYYY-WW");
-        return transactionDataByWeek[weekKey]
-          ? transactionDataByWeek[weekKey] / 1e6
-          : 0;
-      });
-
-      setChartData({
-        labels,
-        datasets: [
-          {
-            label: "Total Weekly Transactions",
-            data: totalData,
-            backgroundColor: "#ff3b57",
-          },
-        ],
-      });
-
-      const totalTransactionsPerChain = {};
-      for (const chainName in transactionsByChain) {
-        totalTransactionsPerChain[chainName] = Object.values(
-          transactionsByChain[chainName]
-        ).reduce((sum, value) => sum + value, 0);
-      }
-
-      const sortedChains = Object.entries(totalTransactionsPerChain)
-        .sort((a, b) => b[1] - a[1])
-        .map(([chainName]) => chainName);
-
-      const topChains = sortedChains.slice(0, 10);
-      const otherChains = sortedChains.slice(10);
-
-      const colorMap = {};
-      topChains.forEach((chain, index) => {
-        colorMap[chain] = chainColors[index];
-      });
-      colorMap["Others"] = chainColors[10];
-
-      const datasetsPerChain = topChains.map((chainName, index) => ({
-        label: chainName,
-        data: labels.map((label) => {
-          const weekKey = moment(label).startOf("isoWeek").format("YYYY-WW");
-          return transactionsByChain[chainName][weekKey]
-            ? transactionsByChain[chainName][weekKey] / 1e6
-            : 0;
-        }),
-        backgroundColor: chainColors[index],
-      }));
-
-      const othersData = labels.map((label) => {
-        const weekKey = moment(label).startOf("isoWeek").format("YYYY-WW");
-        return (
-          otherChains.reduce((totalOthers, chainName) => {
-            return totalOthers + (transactionsByChain[chainName][weekKey] || 0);
-          }, 0) / 1e6
-        );
-      });
-
-      datasetsPerChain.push({
-        label: "Others",
-        data: othersData,
-        backgroundColor: chainColors[10],
-      });
-
-      setChartDataPerChain({
-        labels,
-        datasets: datasetsPerChain,
-      });
-
-      // Cache the data
+      // Cache the data, including totalTransactionsCombined
       localStorage.setItem(
         CACHE_KEY,
-        JSON.stringify({ transactionDataByWeek, transactionsByChain })
+        JSON.stringify({
+          transactionDataByWeek,
+          transactionsByChain,
+          totalTransactionsCombined,
+        })
       );
       localStorage.setItem(
         CACHE_EXPIRY_KEY,
@@ -158,24 +94,46 @@ const TransactionMetrics = () => {
 
     if (cachedData && !isCacheExpired()) {
       // Use cached data
-      const { transactionDataByWeek, transactionsByChain } = cachedData;
-      processCachedData(transactionDataByWeek, transactionsByChain);
+      const {
+        transactionDataByWeek,
+        transactionsByChain,
+        totalTransactionsCombined,
+      } = cachedData;
+      processData(
+        transactionDataByWeek,
+        transactionsByChain,
+        totalTransactionsCombined
+      );
     } else {
       fetchAndProcessData();
     }
   }, []);
 
-  const processCachedData = (transactionDataByWeek, transactionsByChain) => {
-    const startDate = moment("2023-01-01");
-    const endDate = moment("2024-09-30");
+  const processData = (
+    transactionDataByWeek,
+    transactionsByChain,
+    totalTransactionsCombined
+  ) => {
+    // Get all weeks
+    const weekNumbers = Object.keys(transactionDataByWeek);
+    const weekMoments = weekNumbers.map((week) => moment(week, "YYYY-WW"));
+    const sortedWeekMoments = weekMoments.sort((a, b) => a - b);
+    const startWeek = moment.min(weekMoments);
+    const endWeek = moment.max(weekMoments);
 
+    // Generate labels
     const labels = [];
-    let currentWeek = startDate.clone().startOf("isoWeek");
-    while (currentWeek.isBefore(endDate)) {
+    let currentWeek = startWeek.clone();
+    while (currentWeek.isSameOrBefore(endWeek)) {
       labels.push(currentWeek.format("YYYY-MM-DD"));
       currentWeek.add(1, "week");
     }
 
+    const weekKeys = labels.map((label) =>
+      moment(label).startOf("isoWeek").format("YYYY-WW")
+    );
+
+    // Total transactions data
     const totalData = labels.map((label) => {
       const weekKey = moment(label).startOf("isoWeek").format("YYYY-WW");
       return transactionDataByWeek[weekKey]
@@ -190,49 +148,89 @@ const TransactionMetrics = () => {
           label: "Total Weekly Transactions",
           data: totalData,
           backgroundColor: "#ff3b57",
+          barPercentage: 0.5, // Thicker bars
         },
       ],
     });
 
-    const totalTransactionsPerChain = {};
-    for (const chainName in transactionsByChain) {
-      totalTransactionsPerChain[chainName] = Object.values(
-        transactionsByChain[chainName]
-      ).reduce((sum, value) => sum + value, 0);
-    }
+    // For Transactions Per Chain chart
 
-    const sortedChains = Object.entries(totalTransactionsPerChain)
-      .sort((a, b) => b[1] - a[1])
-      .map(([chainName]) => chainName);
+    // Prepare data per week
+    const topChainsPerWeek = {};
+    const allTopChainsSet = new Set();
 
-    const topChains = sortedChains.slice(0, 10);
-    const otherChains = sortedChains.slice(10);
+    weekKeys.forEach((weekKey) => {
+      // For this week, get transaction counts per chain
+      const chainTransactionCounts = {};
+      for (let chainName in transactionsByChain) {
+        const chainData = transactionsByChain[chainName];
+        const txCount = chainData[weekKey] || 0;
+        chainTransactionCounts[chainName] = txCount;
+      }
+      // Sort chains by transaction count
+      const topChains = Object.entries(chainTransactionCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .filter(([chainName, txCount]) => txCount > 0);
 
-    const datasetsPerChain = topChains.map((chainName, index) => ({
+      const topChainNames = topChains.map(([chainName]) => chainName);
+      topChainsPerWeek[weekKey] = topChainNames;
+      topChainNames.forEach((chainName) => allTopChainsSet.add(chainName));
+    });
+
+    const allTopChains = Array.from(allTopChainsSet);
+
+    // Assign colors to chains
+    const colorMap = {};
+    allTopChains.forEach((chain, index) => {
+      colorMap[chain] = chainColors[index % chainColors.length];
+    });
+    colorMap["Others"] = chainColors[10] || "#9E9E9E";
+
+    // Initialize datasets
+    const datasetsPerChain = allTopChains.map((chainName) => ({
       label: chainName,
-      data: labels.map((label) => {
-        const weekKey = moment(label).startOf("isoWeek").format("YYYY-WW");
-        return transactionsByChain[chainName][weekKey]
-          ? transactionsByChain[chainName][weekKey] / 1e6
-          : 0;
-      }),
-      backgroundColor: chainColors[index],
+      data: [],
+      backgroundColor: colorMap[chainName],
+      barPercentage: 0.5, // Thicker bars
     }));
 
-    const othersData = labels.map((label) => {
-      const weekKey = moment(label).startOf("isoWeek").format("YYYY-WW");
-      return (
-        otherChains.reduce((totalOthers, chainName) => {
-          return totalOthers + (transactionsByChain[chainName][weekKey] || 0);
-        }, 0) / 1e6
-      );
-    });
-
+    // Add 'Others' dataset
     datasetsPerChain.push({
       label: "Others",
-      data: othersData,
-      backgroundColor: chainColors[10],
+      data: [],
+      backgroundColor: colorMap["Others"],
+      barPercentage: 0.5, // Thicker bars
     });
+
+    // Build data arrays
+    for (let i = 0; i < weekKeys.length; i++) {
+      const weekKey = weekKeys[i];
+      const topChains = topChainsPerWeek[weekKey];
+      const otherChains = Object.keys(transactionsByChain).filter(
+        (chainName) => !topChains.includes(chainName)
+      );
+
+      // For each chain in allTopChains
+      allTopChains.forEach((chainName, index) => {
+        const chainData = transactionsByChain[chainName];
+        const txCount = chainData[weekKey] || 0;
+        if (topChains.includes(chainName)) {
+          datasetsPerChain[index].data.push(txCount / 1e6);
+        } else {
+          datasetsPerChain[index].data.push(0);
+        }
+      });
+
+      // For 'Others' dataset
+      const othersTxCount = otherChains.reduce((sum, chainName) => {
+        const chainData = transactionsByChain[chainName];
+        return sum + (chainData[weekKey] || 0);
+      }, 0);
+      datasetsPerChain[datasetsPerChain.length - 1].data.push(
+        othersTxCount / 1e6
+      );
+    }
 
     setChartDataPerChain({
       labels,
@@ -246,6 +244,7 @@ const TransactionMetrics = () => {
     scales: {
       x: {
         type: "time",
+        stacked: true,
         time: {
           unit: "week",
           tooltipFormat: "ll",
@@ -266,6 +265,7 @@ const TransactionMetrics = () => {
         },
       },
       y: {
+        stacked: true,
         title: {
           display: true,
           text: "Transactions (Millions)",
@@ -288,9 +288,10 @@ const TransactionMetrics = () => {
       },
       tooltip: {
         callbacks: {
-          label: (context) => {
-            const value = context.parsed.y;
-            return `${context.dataset.label}: ${value.toFixed(2)}M`;
+          label: function (context) {
+            const label = context.dataset.label || "";
+            const value = context.parsed.y || 0;
+            return `${label}: ${value.toFixed(2)}M`;
           },
         },
       },
