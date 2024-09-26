@@ -11,7 +11,7 @@ import {
   Tooltip,
   Legend,
   TimeScale,
-  CategoryScale, // Add this for y-axis as a category scale
+  CategoryScale,
 } from "chart.js";
 
 ChartJS.register(
@@ -25,14 +25,14 @@ ChartJS.register(
 
 const LaunchTimelineChart = () => {
   const [chartData, setChartData] = useState(null);
-  const [timeRange, setTimeRange] = useState("12month"); // Default time range
+  const [timeRange, setTimeRange] = useState("12month");
 
   const timeRanges = {
     "1week": 7,
     "3month": 90,
     "6month": 180,
     "12month": 365,
-    All: 365 * 5, // Custom All-time range
+    All: 365 * 5,
   };
 
   useEffect(() => {
@@ -42,12 +42,15 @@ const LaunchTimelineChart = () => {
 
         // Map RaaS providers to colors
         const raasColors = {
-          Gelato: "#ff3b57",
-          Conduit: "#46BDC6",
-          Alchemy: "#4185F4", // Updated Alchemy color
-          Caldera: "#EC6731",
-          Altlayer: "#B28AFE",
+          gelato: "#ff3b57",
+          conduit: "#46BDC6",
+          alchemy: "#4185F4", // Fix Alchemy color
+          caldera: "#EC6731",
+          altlayer: "#B28AFE",
         };
+
+        // Normalize RaaS provider names to lowercase to avoid duplicates
+        const normalizeRaaS = (provider) => provider.trim().toLowerCase();
 
         // Filter data based on selected time range
         const now = new Date();
@@ -60,13 +63,24 @@ const LaunchTimelineChart = () => {
           return diffDays <= rangeDays;
         });
 
+        // Add jitter to the x-axis to separate dots for chains launched on the same day
+        const jitterDate = (date, index) => {
+          const jitterAmount = (Math.random() - 0.5) * 0.2; // Random jitter between -0.1 and 0.1 days
+          const jitteredDate = new Date(date);
+          jitteredDate.setDate(jitteredDate.getDate() + jitterAmount * index); // Slightly adjust the date
+          return jitteredDate;
+        };
+
         // Prepare data points for the chart
-        const chartPoints = filteredData.map((chain) => ({
-          x: chain.launchDate,
-          y: chain.raas, // Place by RaaS provider
-          color: raasColors[chain.raas], // Color based on provider
-          name: chain.name, // Each chain gets a distinct point
+        const chartPoints = filteredData.map((chain, index) => ({
+          x: jitterDate(chain.launchDate, index), // Apply jitter to the launch date
+          y: normalizeRaaS(chain.raas), // Use normalized RaaS provider for y-axis
+          color: raasColors[normalizeRaaS(chain.raas)], // Set color based on normalized provider
+          name: chain.name, // Chain name for tooltip
         }));
+
+        // Set unique RaaS providers for y-axis labels
+        const raasProviders = [...new Set(chartPoints.map((point) => point.y))];
 
         setChartData({
           datasets: [
@@ -88,7 +102,7 @@ const LaunchTimelineChart = () => {
 
   const options = {
     responsive: true,
-    maintainAspectRatio: false, // Allow the chart to resize better
+    maintainAspectRatio: false,
     scales: {
       x: {
         type: "time",
@@ -101,8 +115,8 @@ const LaunchTimelineChart = () => {
         },
       },
       y: {
-        type: "category", // Ensure y-axis is a category
-        labels: ["Gelato", "Conduit", "Alchemy", "Caldera", "Altlayer"], // Keep RaaS providers
+        type: "category",
+        labels: ["gelato", "conduit", "alchemy", "caldera", "altlayer"], // Ensure RaaS providers are consistent
         title: {
           display: true,
           text: "RaaS Providers",
@@ -114,13 +128,12 @@ const LaunchTimelineChart = () => {
         callbacks: {
           label: (context) => {
             const point = context.raw;
-            return `${point.name} (${point.y})`; // Proper template literal syntax
+            return `${point.name} (${point.y})`; // Correct tooltip formatting
           },
         },
       },
-
       legend: {
-        display: false, // Remove legend as RaaS providers are on y-axis
+        display: false,
       },
     },
   };

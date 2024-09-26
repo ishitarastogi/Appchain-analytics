@@ -1,17 +1,32 @@
-/* src/MainContent/Charts/LaunchTimelineChart.css */
+.home {
+  display: flex;
+}
 
+.main-content {
+  flex-grow: 1;
+  background-color: #1e1e1e;
+  color: white;
+  padding: 20px;
+  margin-left: 80px;
+}
+
+.content-area {
+  padding: 20px;
+}
+
+/* Styling for LaunchTimelineChart component */
 .chart-container {
-  background-color: #000000; /* Black background */
+  background-color: #000000;
   width: 100%;
-  max-width: 1200px; /* Increased width */
-  height: 600px; /* Increased height for more space */
-  margin: 0 auto;
-  padding: 10px;
-  border-radius: 8px;
+  max-width: 1100px;
+  height: 550px;
+  margin: 20px auto;
+  padding: 20px;
+  border-radius: 10px;
 }
 
 .chart-wrapper {
-  height: calc(100% - 50px); /* Adjust for the height of buttons */
+  height: calc(100% - 50px);
 }
 
 .time-range-buttons {
@@ -21,7 +36,7 @@
 
 .time-range-buttons button {
   margin-left: 5px;
-  padding: 6px 12px;
+  padding: 8px 15px;
   background-color: #333333;
   color: #ffffff;
   border: none;
@@ -32,4 +47,37 @@
 .time-range-buttons button.active,
 .time-range-buttons button:hover {
   background-color: #555555;
+}
+
+/* Sidebar styling */
+.sidebar {
+  width: 250px;
+  background-color: #111;
+  height: 100vh;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-logo {
+  margin-bottom: 30px;
+}
+
+.sidebar-item {
+  color: #ccc;
+  padding: 10px 20px;
+  margin-bottom: 15px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.sidebar-item:hover {
+  background-color: #222;
+  color: #fff;
+}
+
+.sidebar-item.active {
+  background-color: #ff3b57;
+  color: #fff;
+  border-radius: 5px;
 }

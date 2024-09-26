@@ -1,0 +1,83 @@
+/* src/MainContent/Charts/TransactionMetrics.css */
+
+.metrics-container {
+  background-color: #000000; /* Black background */
+  color: #ffffff; /* White text */
+  padding: 20px;
+  border-radius: 8px;
+  margin: 20px;
+}
+
+.metrics-heading {
+  font-size: 1.5rem;
+  margin-bottom: 20px;
+}
+
+.metrics-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.text-selectors {
+  display: flex;
+}
+
+.metrics-selector {
+  margin-right: 15px;
+  cursor: pointer;
+  font-weight: bold;
+  color: #b0b0b0;
+}
+
+.metrics-selector.active {
+  color: #ffffff;
+}
+
+.stats-cards {
+  display: flex;
+}
+
+.stats-card {
+  background-color: #181818;
+  padding: 15px;
+  border-radius: 8px;
+  margin-left: 10px;
+  text-align: center;
+}
+
+.stats-card p {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #b0b0b0;
+}
+
+.stats-card span {
+  display: block;
+  margin-top: 5px;
+  font-size: 1.1rem;
+}
+
+.chart-container {
+  margin-top: 20px;
+}
+
+.chart-header {
+  margin-bottom: 10px;
+}
+
+.chart-placeholder {
+  position: relative;
+  height: 400px; /* Adjust as needed */
+}
+
+.chart-footer {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 10px;
+}
+
+.chart-footer span {
+  color: #b0b0b0;
+}
