@@ -5,7 +5,7 @@
   width: 100%;
   max-width: 1200px; /* Make the chart wider */
   height: 600px; /* Increase the height */
-  margin: 0 auto;
+  margin-left: 120px;
   padding: 20px; /* Increase padding */
   border-radius: 8px;
 }

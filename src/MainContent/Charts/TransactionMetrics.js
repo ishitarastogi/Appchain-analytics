@@ -242,6 +242,7 @@ const TransactionMetrics = () => {
 
   const options = {
     responsive: true,
+    maintainAspectRatio: false, // Makes the chart fit the screen
     scales: {
       x: {
         type: "time",
@@ -261,7 +262,7 @@ const TransactionMetrics = () => {
           color: "#ffffff",
         },
         grid: {
-          color: "#444444",
+          display: false, // Remove the grid lines
         },
       },
       y: {
@@ -274,7 +275,7 @@ const TransactionMetrics = () => {
           color: "#ffffff",
         },
         grid: {
-          color: "#444444",
+          display: false, // Remove the grid lines
         },
       },
     },
@@ -331,7 +332,7 @@ const TransactionMetrics = () => {
           </div>
         </div>
       </div>
-      <div className="chart-container">
+      <div className="transaction-metrics-chart-container">
         {selectedChart === "transactions" && chartData ? (
           <Bar data={chartData} options={options} />
         ) : selectedChart === "perChain" && chartDataPerChain ? (

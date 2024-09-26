@@ -1,11 +1,10 @@
-/* src/MainContent/Charts/TransactionMetrics.css */
-
 .metrics-container {
   background-color: #000000; /* Black background */
   color: #ffffff; /* White text */
   padding: 20px;
   border-radius: 8px;
   margin: 20px;
+  margin-left: 200px; /* Adjusted to compensate for the sidebar */
 }
 
 .metrics-heading {
@@ -59,8 +58,14 @@
   font-size: 1.1rem;
 }
 
-.chart-container {
+.transaction-metrics-chart-container {
   margin-top: 20px;
+  width: calc(
+    100% - 250px
+  ); /* Adjusted to fit within the available width minus sidebar */
+  height: 600px; /* Adjust the height as needed */
+  background-color: #000000; /* Keep background black */
+  overflow-x: scroll; /* Make the x-axis scrollable to prevent overflow */
 }
 
 .chart-header {
