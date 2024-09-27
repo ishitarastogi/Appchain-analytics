@@ -1,18 +1,22 @@
+/* src/components/MainContent/Charts/TopChains.css */
+
+/* Container Styles */
 .top-chains-container {
-  background-color: #000000;
-  color: #ffffff;
+  background-color: #000;
+  color: #fff;
   padding: 20px;
-  border-radius: 8px;
-  margin: 20px;
-  margin-left: 200px;
+  margin: 20px auto; /* Center the container */
+  border-radius: 10px;
+  max-width: 1200px; /* Limit the maximum width */
 }
 
 .top-chains-heading {
-  font-size: 1.5rem;
-  margin-bottom: 20px;
   text-align: center;
+  font-size: 1.8rem;
+  margin-bottom: 20px;
 }
 
+/* Cards Container */
 .top-chains-cards {
   display: flex;
   flex-wrap: wrap;
@@ -20,67 +24,170 @@
   justify-content: center;
 }
 
+/* Individual Card */
 .chain-card {
-  background-color: #181818;
+  background-color: #1e1e1e;
   padding: 20px;
-  border-radius: 8px;
-  width: calc(33.333% - 20px);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  position: relative;
+  border-radius: 10px;
+  flex: 1 1 calc(33.333% - 40px); /* Three cards per row with gaps */
+  max-width: 350px; /* Prevent cards from becoming too wide */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  align-items: center;
   transition: transform 0.3s, box-shadow 0.3s;
+  box-sizing: border-box; /* Ensure padding is included in width */
 }
 
 .chain-card:hover {
   transform: translateY(-5px);
-  box-shadow: 0 8px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 8px 12px rgba(0, 0, 0, 0.3);
 }
 
+/* Chain Logo */
+.chain-logo {
+  width: 60px;
+  height: 60px;
+  object-fit: contain;
+  margin-bottom: 15px;
+}
+
+/* Chain Details */
 .chain-name {
-  margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.4rem;
+  font-weight: bold;
   margin-bottom: 10px;
-  text-align: center;
 }
 
 .chain-transactions,
 .chain-market-share,
 .chain-percentage-increase {
-  margin: 5px 0;
-  font-size: 1rem;
   text-align: center;
+  margin: 5px 0;
 }
 
+/* Logos Section */
 .chain-logos {
   display: flex;
-  gap: 10px;
   justify-content: center;
+  align-items: center;
+  gap: 10px; /* Controlled spacing between logos */
   margin-top: 15px;
 }
 
-.logo {
-  width: 40px;
+/* Logo Containers */
+.logo-container {
+  position: relative; /* To position the tooltip correctly */
+  width: 40px; /* Reduced size for better aesthetics */
   height: 40px;
-  object-fit: contain;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 2px solid #fff; /* Optional: Adds a border around logos */
+  background-color: #fff; /* Fallback background */
+  transition: transform 0.3s;
+  cursor: pointer; /* Indicate interactivity */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* Logo Images */
+.logo-container img.logo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+}
+
+/* Logo Placeholder Styling */
+.logo-container .logo-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: #555; /* Background color for placeholder */
+  color: #fff;
+  font-size: 0.8rem;
+  text-align: center;
+  border-radius: 50%;
+}
+
+/* Custom Tooltip Styling using Pseudo-Elements */
+.logo-container::after {
+  content: attr(title); /* Use the title attribute for tooltip text */
+  position: absolute;
+  bottom: -30px; /* Position the tooltip below the logo */
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.8);
+  color: #fff;
+  padding: 5px 8px;
   border-radius: 4px;
-  background-color: #ffffff;
-  padding: 5px;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+  z-index: 10;
 }
 
-@media (max-width: 1200px) {
+/* Tooltip Arrow */
+.logo-container::before {
+  content: "";
+  position: absolute;
+  bottom: -10px; /* Position the arrow above the tooltip */
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: rgba(0, 0, 0, 0.8) transparent transparent transparent;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+  z-index: 10;
+}
+
+/* Show Tooltip on Hover */
+.logo-container:hover::after,
+.logo-container:hover::before {
+  opacity: 1;
+}
+
+/* Optional: Slight scale effect on logos when hovered */
+.logo-container:hover {
+  transform: scale(1.1);
+}
+
+/* Responsive Design */
+@media (max-width: 1000px) {
   .chain-card {
-    width: calc(50% - 20px);
+    flex: 1 1 calc(50% - 40px); /* Two cards per row */
   }
 }
 
-@media (max-width: 768px) {
+@media (max-width: 600px) {
   .chain-card {
-    width: 100%;
+    flex: 1 1 100%; /* Single card per row */
   }
 
-  .top-chains-container {
-    margin-left: 0;
+  .logo-container {
+    width: 35px;
+    height: 35px;
+  }
+
+  /* Adjust tooltip position for smaller screens if needed */
+  .logo-container::after {
+    bottom: -25px;
+    font-size: 0.7rem;
+  }
+
+  .logo-container::before {
+    bottom: -15px;
+    border-width: 4px;
+  }
+
+  .chain-logos {
+    gap: 8px; /* Slightly reduce spacing on smaller screens */
   }
 }
