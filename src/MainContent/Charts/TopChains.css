@@ -5,9 +5,9 @@
   background-color: #000;
   color: #fff;
   padding: 20px;
-  margin: 20px auto; /* Center the container */
+  margin-left: 25px;
+  max-width: 1200px;
   border-radius: 10px;
-  max-width: 1200px; /* Limit the maximum width */
 }
 
 .top-chains-heading {

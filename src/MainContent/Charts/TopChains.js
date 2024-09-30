@@ -159,7 +159,7 @@ const TopChains = () => {
 
   return (
     <div className="top-chains-container">
-      <h2 className="top-chains-heading">Top 6 Blockchain Chains</h2>
+      <h2 className="top-chains-heading">Top 6 Blockchddfdain Chains</h2>
       <div className="top-chains-cards">
         {topChains.map((chain, index) => (
           <div key={index} className="chain-card" tabIndex="0">

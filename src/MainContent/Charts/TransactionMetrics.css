@@ -1,10 +1,10 @@
 .metrics-container {
-  background-color: #000000; /* Black background */
-  color: #ffffff; /* White text */
+  background-color: #000000;
+  color: #ffffff;
   padding: 20px;
   border-radius: 8px;
-  margin: 20px;
-  margin-left: 40px; /* Adjusted to compensate for the sidebar */
+  margin-left: 25px;
+  max-width: 1200px;
 }
 
 .metrics-heading {
@@ -42,7 +42,7 @@
   background-color: #181818;
   padding: 15px;
   border-radius: 8px;
-  margin-left: 10px;
+  margin-right: 10px;
   text-align: center;
 }
 
@@ -60,29 +60,8 @@
 
 .transaction-metrics-chart-container {
   margin-top: 20px;
-  width: calc(
-    100% - 250px
-  ); /* Adjusted to fit within the available width minus sidebar */
-  height: 600px; /* Adjust the height as needed */
-  background-color: #000000; /* Keep background black */
-  overflow-x: scroll; /* Make the x-axis scrollable to prevent overflow */
-}
-
-.chart-header {
-  margin-bottom: 10px;
-}
-
-.chart-placeholder {
-  position: relative;
-  height: 400px; /* Adjust as needed */
-}
-
-.chart-footer {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 10px;
-}
-
-.chart-footer span {
-  color: #b0b0b0;
+  width: 100%;
+  height: 600px;
+  background-color: #000000;
+  overflow-x: scroll;
 }

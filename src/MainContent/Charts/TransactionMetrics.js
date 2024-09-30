@@ -58,12 +58,20 @@ const TransactionMetrics = () => {
 
   const fetchAndProcessData = async () => {
     try {
+      console.log("Fetching Google Sheet data...");
       const sheetData = await fetchGoogleSheetData();
+      console.log("Sheet data fetched:", sheetData);
+
+      console.log("Fetching all transactions...");
       const {
         transactionDataByWeek,
         transactionsByChain,
         totalTransactionsCombined,
       } = await fetchAllTransactions(sheetData);
+      console.log("Transaction data fetched:");
+      console.log("Transaction Data By Week:", transactionDataByWeek);
+      console.log("Transactions By Chain:", transactionsByChain);
+      console.log("Total Transactions Combined:", totalTransactionsCombined);
 
       processData(
         transactionDataByWeek,
@@ -93,7 +101,7 @@ const TransactionMetrics = () => {
     const cachedData = JSON.parse(localStorage.getItem(CACHE_KEY));
 
     if (cachedData && !isCacheExpired()) {
-      // Use cached data
+      console.log("Using cached data.");
       const {
         transactionDataByWeek,
         transactionsByChain,
@@ -105,6 +113,7 @@ const TransactionMetrics = () => {
         totalTransactionsCombined
       );
     } else {
+      console.log("Cache expired or not found. Fetching new data.");
       fetchAndProcessData();
     }
   }, []);

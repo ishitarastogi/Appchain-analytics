@@ -1,38 +1,56 @@
+// src/services/googleSheetService.js
+
 import axios from "axios";
 import moment from "moment";
 
 // Fetch Google Sheets Data
 export const fetchGoogleSheetData = async () => {
-  const GOOGLE_SHEET_URL = `https://sheets.googleapis.com/v4/spreadsheets/1z-wz6qNOb2Zs7d3xnPjhl004YhIuov-ecd60JzffaNM/values/Sheet1!A2:Z1000?key=${process.env.REACT_APP_GOOGLE_SHEETS_API_KEY}`;
+  const apiKey = process.env.REACT_APP_GOOGLE_SHEETS_API_KEY;
+  const GOOGLE_SHEET_URL = `https://sheets.googleapis.com/v4/spreadsheets/1z-wz6qNOb2Zs7d3xnPjhl004YhIuov-ecd60JzffaNM/values/Sheet1!A2:Z1000?key=${apiKey}`;
+
+  console.log("Google Sheets API Key:", apiKey);
+  console.log("Fetching Google Sheet data from URL:", GOOGLE_SHEET_URL);
 
   try {
     const response = await axios.get(GOOGLE_SHEET_URL);
+    console.log("Google Sheets API response:", response.data);
+
     const rows = response.data.values;
 
-    return rows.map((row) => ({
-      name: row[0], // Column A: Name
-      blockScoutUrl: row[1], // Column B: Blockscout URL
-      id: row[2], // Column C: ID
-      website: row[3], // Column D: Website
-      raas: row[4], // Column E: RaaS
-      year: row[5], // Column F: Year
-      quarter: row[6], // Column G: Quarter
-      month: row[7], // Column H: Month
-      launchDate: row[8], // Column I: Launch date
-      vertical: row[9], // Column J: Vertical
-      framework: row[10], // Column K: Framework
-      da: row[11], // Column L: Data Availability (DA)
-      l2OrL3: row[12], // Column M: L2/L3
-      settlementWhenL3: row[13], // Column N: Settlement when L3
-      logo: row[14], // Column O: Logo (if present)
+    if (!rows) {
+      console.error("No data returned from Google Sheets API.");
+      throw new Error("No data returned from Google Sheets API.");
+    }
+
+    const mappedData = rows.map((row) => ({
+      name: row[0],
+      blockScoutUrl: row[1],
+      id: row[2],
+      website: row[3],
+      raas: row[4],
+      year: row[5],
+      quarter: row[6],
+      month: row[7],
+      launchDate: row[8],
+      vertical: row[9],
+      framework: row[10],
+      da: row[11],
+      l2OrL3: row[12],
+      settlementWhenL3: row[13],
+      logo: row[14],
     }));
+
+    console.log("Mapped Google Sheet data:", mappedData);
+
+    return mappedData;
   } catch (error) {
     console.error("Error fetching Google Sheets data:", error);
     throw error;
   }
 };
 
-// Fetch Block Explorer Data for a single chain (transactions and active accounts)
+// src/services/googleSheetService.js
+
 export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
   const normalizedUrl = blockScoutUrl.replace(/\/+$/, "");
   const formattedLaunchDate = moment(new Date(launchDate)).format("YYYY-MM-DD");
@@ -42,16 +60,21 @@ export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
     `${normalizedUrl}/api/v1/lines/newTxns?from=${formattedLaunchDate}&to=${currentDate}`
   );
 
-  const isDevelopment =
-    !process.env.NODE_ENV || process.env.NODE_ENV === "development";
-  const proxyBaseUrl = isDevelopment
-    ? "http://localhost:3000/api/proxy?url="
-    : "/api/proxy?url=";
+  const proxyBaseUrl = "/api/proxy?url=";
+
+  console.log("\nFetching block explorer data:");
+  console.log("BlockScout URL:", blockScoutUrl);
+  console.log("Normalized URL:", normalizedUrl);
+  console.log("Formatted Launch Date:", formattedLaunchDate);
+  console.log("Current Date:", currentDate);
+  console.log("Transactions API URL:", decodeURIComponent(transactionsApiUrl));
 
   try {
-    const transactionsResponse = await axios.get(
-      `${proxyBaseUrl}${transactionsApiUrl}`
-    );
+    const requestUrl = `${proxyBaseUrl}${transactionsApiUrl}`;
+    console.log("Full request URL:", requestUrl);
+
+    const transactionsResponse = await axios.get(requestUrl);
+    console.log("Block explorer API response:", transactionsResponse.data);
 
     return {
       transactions: transactionsResponse.data.chart.map((item) => ({
@@ -68,7 +91,6 @@ export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
   }
 };
 
-// Function to calculate weekly transactions across all chains
 export const fetchAllTransactions = async (sheetData) => {
   let totalTransactionsCombined = 0;
   const transactionDataByWeek = {};

@@ -13,6 +13,8 @@
     "chart.js": "^4.4.4",
     "chartjs-adapter-moment": "^1.0.1",
     "d3": "^7.9.0",
+    "express": "^4.18.2",
+    "http-proxy-middleware": "^3.0.2",
     "moment": "^2.30.1",
     "react": "^18.3.1",
     "react-chartjs-2": "^5.2.0",
@@ -28,7 +30,8 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "serve": "serve -s build",
-    "vercel-build": "npm run build"
+    "vercel-build": "npm run build",
+    "start-backend": "node server/proxy.js"
   },
   "eslintConfig": {
     "extends": [

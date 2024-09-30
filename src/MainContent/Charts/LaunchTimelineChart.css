@@ -1,12 +1,15 @@
-/* src/MainContent/Charts/LaunchTimelineChart.css */
+/* Section that holds both the heading and chart */
+.chart-section {
+  margin-left: 25px;
+  margin-top: 10px;
+}
 
 .chart-container {
-  background-color: #000000; /* Black background */
+  background-color: #000000;
   width: 100%;
-  max-width: 1200px; /* Make the chart wider */
-  height: 600px; /* Increase the height */
-  margin-left: 120px;
-  padding: 20px; /* Increase padding */
+  max-width: 1200px;
+  height: 600px;
+  padding: 20px;
   border-radius: 8px;
 }
 

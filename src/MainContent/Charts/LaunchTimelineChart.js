@@ -3,7 +3,7 @@ import { fetchGoogleSheetData } from "../../services/googleSheetService";
 import { Scatter } from "react-chartjs-2";
 import "chartjs-adapter-moment";
 import * as d3 from "d3";
-
+import "./LaunchTimelineChart.css";
 import {
   Chart as ChartJS,
   LinearScale,
@@ -12,6 +12,7 @@ import {
   Legend,
   TimeScale,
   CategoryScale,
+  Title, // Import the Title plugin from Chart.js
 } from "chart.js";
 
 ChartJS.register(
@@ -20,7 +21,8 @@ ChartJS.register(
   Tooltip,
   Legend,
   TimeScale,
-  CategoryScale
+  CategoryScale,
+  Title // Register the Title plugin
 );
 
 const LaunchTimelineChart = () => {
@@ -40,19 +42,16 @@ const LaunchTimelineChart = () => {
       try {
         const data = await fetchGoogleSheetData();
 
-        // Map RaaS providers to colors
         const raasColors = {
           gelato: "#ff3b57",
           conduit: "#46BDC6",
-          alchemy: "#4185F4", // Fix Alchemy color
+          alchemy: "#4185F4",
           caldera: "#EC6731",
           altlayer: "#B28AFE",
         };
 
-        // Normalize RaaS provider names to lowercase to avoid duplicates
         const normalizeRaaS = (provider) => provider.trim().toLowerCase();
 
-        // Filter data based on selected time range
         const now = new Date();
         const rangeDays = timeRanges[timeRange];
 
@@ -63,23 +62,20 @@ const LaunchTimelineChart = () => {
           return diffDays <= rangeDays;
         });
 
-        // Add jitter to the x-axis to separate dots for chains launched on the same day
         const jitterDate = (date, index) => {
-          const jitterAmount = (Math.random() - 0.5) * 0.2; // Random jitter between -0.1 and 0.1 days
+          const jitterAmount = (Math.random() - 0.5) * 0.2;
           const jitteredDate = new Date(date);
-          jitteredDate.setDate(jitteredDate.getDate() + jitterAmount * index); // Slightly adjust the date
+          jitteredDate.setDate(jitteredDate.getDate() + jitterAmount * index);
           return jitteredDate;
         };
 
-        // Prepare data points for the chart
         const chartPoints = filteredData.map((chain, index) => ({
-          x: jitterDate(chain.launchDate, index), // Apply jitter to the launch date
-          y: normalizeRaaS(chain.raas), // Use normalized RaaS provider for y-axis
-          color: raasColors[normalizeRaaS(chain.raas)], // Set color based on normalized provider
-          name: chain.name, // Chain name for tooltip
+          x: jitterDate(chain.launchDate, index),
+          y: normalizeRaaS(chain.raas),
+          color: raasColors[normalizeRaaS(chain.raas)],
+          name: chain.name,
         }));
 
-        // Set unique RaaS providers for y-axis labels
         const raasProviders = [...new Set(chartPoints.map((point) => point.y))];
 
         setChartData({
@@ -116,7 +112,7 @@ const LaunchTimelineChart = () => {
       },
       y: {
         type: "category",
-        labels: ["gelato", "conduit", "alchemy", "caldera", "altlayer"], // Ensure RaaS providers are consistent
+        labels: ["gelato", "conduit", "alchemy", "caldera", "altlayer"],
         title: {
           display: true,
           text: "RaaS Providers",
@@ -128,35 +124,50 @@ const LaunchTimelineChart = () => {
         callbacks: {
           label: (context) => {
             const point = context.raw;
-            return `${point.name} (${point.y})`; // Correct tooltip formatting
+            return `${point.name} (${point.y})`;
           },
         },
       },
       legend: {
         display: false,
       },
+      title: {
+        display: true,
+        text: "RaaS Chain Launch Timeline", // Custom heading inside the chart
+        align: "start", // Align the title to the start (left)
+        color: "#ffffff", // Title color
+        font: {
+          size: 18, // Font size for the title
+        },
+        padding: {
+          top: 10, // Space above the title
+          left: 10, // Space from the left
+        },
+      },
     },
   };
 
   return (
-    <div className="chart-container">
-      <div className="time-range-buttons">
-        {Object.keys(timeRanges).map((range) => (
-          <button
-            key={range}
-            onClick={() => setTimeRange(range)}
-            className={timeRange === range ? "active" : ""}
-          >
-            {range}
-          </button>
-        ))}
-      </div>
-      <div className="chart-wrapper">
-        {chartData ? (
-          <Scatter data={chartData} options={options} />
-        ) : (
-          <p>Loading chart...</p>
-        )}
+    <div className="chart-section">
+      <div className="chart-container">
+        <div className="time-range-buttons">
+          {Object.keys(timeRanges).map((range) => (
+            <button
+              key={range}
+              onClick={() => setTimeRange(range)}
+              className={timeRange === range ? "active" : ""}
+            >
+              {range}
+            </button>
+          ))}
+        </div>
+        <div className="chart-wrapper">
+          {chartData ? (
+            <Scatter data={chartData} options={options} />
+          ) : (
+            <p>Loading chart...</p>
+          )}
+        </div>
       </div>
     </div>
   );
