@@ -1,3 +1,5 @@
+/* src/components/MainContent/Charts/TransactionMetrics.css */
+
 .metrics-container {
   background-color: #000000;
   color: #ffffff;
@@ -46,6 +48,11 @@
   text-align: center;
 }
 
+.stats-card.total-transactions-card {
+  flex: 1.5; /* Increases the width by 50% compared to other cards */
+  /* No background-color change to maintain existing CSS */
+}
+
 .stats-card p {
   margin: 0;
   font-size: 0.9rem;
@@ -58,10 +65,34 @@
   font-size: 1.1rem;
 }
 
+.percentage-increase {
+  margin-top: 8px;
+  font-size: 1rem;
+}
+
+/* Removed the .percentage-increase.positive and .percentage-increase.negative classes */
+
+/* Retain existing chart container styles */
 .transaction-metrics-chart-container {
   margin-top: 20px;
   width: 100%;
   height: 600px;
   background-color: #000000;
   overflow-x: scroll;
+}
+
+/* Ensure color boxes appear in the legend */
+.chartjs-legend li span {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-right: 5px;
+  border-radius: 2px;
+}
+
+/* Optional: Style the loading text */
+.loading-text {
+  color: #ffffff;
+  text-align: center;
+  margin-top: 50px;
 }

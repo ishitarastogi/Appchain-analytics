@@ -27,7 +27,7 @@ ChartJS.register(
 
 const LaunchTimelineChart = () => {
   const [chartData, setChartData] = useState(null);
-  const [timeRange, setTimeRange] = useState("12month");
+  const [timeRange, setTimeRange] = useState("3month");
 
   const timeRanges = {
     "1week": 7,
@@ -124,25 +124,12 @@ const LaunchTimelineChart = () => {
         callbacks: {
           label: (context) => {
             const point = context.raw;
-            return `${point.name} (${point.y})`;
+            return `${point.name} (${point.y})`; // Fixed template literal
           },
         },
       },
       legend: {
         display: false,
-      },
-      title: {
-        display: true,
-        text: "RaaS Chain Launch Timeline", // Custom heading inside the chart
-        align: "start", // Align the title to the start (left)
-        color: "#ffffff", // Title color
-        font: {
-          size: 18, // Font size for the title
-        },
-        padding: {
-          top: 10, // Space above the title
-          left: 10, // Space from the left
-        },
       },
     },
   };
@@ -150,17 +137,23 @@ const LaunchTimelineChart = () => {
   return (
     <div className="chart-section">
       <div className="chart-container">
-        <div className="time-range-buttons">
-          {Object.keys(timeRanges).map((range) => (
-            <button
-              key={range}
-              onClick={() => setTimeRange(range)}
-              className={timeRange === range ? "active" : ""}
-            >
-              {range}
-            </button>
-          ))}
+        {/* New Flex Container for Header */}
+        <div className="chart-header">
+          <h2 className="metrics-heading">RaaS Launch Timeline chart </h2>
+
+          <div className="time-range-buttons">
+            {Object.keys(timeRanges).map((range) => (
+              <button
+                key={range}
+                onClick={() => setTimeRange(range)}
+                className={timeRange === range ? "active" : ""}
+              >
+                {range}
+              </button>
+            ))}
+          </div>
         </div>
+
         <div className="chart-wrapper">
           {chartData ? (
             <Scatter data={chartData} options={options} />

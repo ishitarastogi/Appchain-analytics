@@ -2,8 +2,8 @@ import React from "react";
 import Header from "../Header/Header";
 import Sidebar from "../Sidebar/Sidebar";
 import LaunchTimelineChart from "../MainContent/Charts/LaunchTimelineChart";
-import TransactionMetrics from "../MainContent/Charts/TransactionMetrics"; // Existing import
-import TopChains from "../MainContent/Charts/TopChains"; // New import for TopChains
+import TransactionMetrics from "../MainContent/Charts/TransactionMetrics";
+import TopChains from "../MainContent/Charts/TopChains";
 import "./Home.css";
 
 const Home = () => {
@@ -14,8 +14,8 @@ const Home = () => {
         <Header />
         <div className="content-area">
           <LaunchTimelineChart />
-          <TransactionMetrics /> {/* Existing metrics and chart */}
-          <TopChains /> {/* New TopChains section */}
+          <TransactionMetrics />
+          <TopChains />
         </div>
       </div>
     </div>

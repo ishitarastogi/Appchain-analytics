@@ -1,41 +1,48 @@
-// src/components/MainContent/Charts/TopChains.js
-
 import React, { useEffect, useState } from "react";
 import moment from "moment";
 import "./TopChains.css";
 import { fetchGoogleSheetData } from "../../services/googleSheetService";
 
-// Importing RaaS Logos
+// Importing logos
 import GelatoLogo from "../../assets/logos/raas/Gelato.png";
 import ConduitLogo from "../../assets/logos/raas/conduit.jpg";
 import CalderaLogo from "../../assets/logos/raas/Caldera.png";
 import AltlayerLogo from "../../assets/logos/raas/altlayer.png";
-
-// Importing DA Logos
 import EthereumDALogo from "../../assets/logos/da/ethereum.png";
 import DACLogo from "../../assets/logos/da/dac.png";
 import CelestiaLogo from "../../assets/logos/da/celestia.png";
-
-// Importing Framework Logos
 import OPStackLogo from "../../assets/logos/framework/op.png";
 import OrbitLogo from "../../assets/logos/framework/arbitrums.png";
 
-// Mapping for RaaS Logos
+// Badge Component
+const Badge = ({ logo, category, name }) => (
+  <div className="badge-container">
+    <div className="badge-logo">
+      {logo ? (
+        <img src={logo} alt={`${name} Logo`} loading="lazy" />
+      ) : (
+        <div className="badge-placeholder">{category}</div>
+      )}
+    </div>
+    <div className="badge-details">
+      <span className="badge-category">{category}</span>
+      <span className="badge-name">{name}</span>
+    </div>
+  </div>
+);
+
+// Mapping for Logos
 const raasLogos = {
   gelato: GelatoLogo,
   conduit: ConduitLogo,
   caldera: CalderaLogo,
   altlayer: AltlayerLogo,
 };
-
-// Mapping for DA Logos
 const daLogos = {
   ethereumda: EthereumDALogo,
   dac: DACLogo,
   celestia: CelestiaLogo,
 };
-
-// Mapping for Framework Logos
 const frameworkLogos = {
   opstack: OPStackLogo,
   orbit: OrbitLogo,
@@ -88,7 +95,7 @@ const TopChains = () => {
     );
 
     chainTotals.sort((a, b) => b.total - a.total);
-    const topSix = chainTotals.slice(0, 6); // Top 6 Chains
+    const topSix = chainTotals.slice(0, 6);
 
     let calculatedTotalTxCombined = totalTxCombined;
     if (!calculatedTotalTxCombined || isNaN(calculatedTotalTxCombined)) {
@@ -129,7 +136,6 @@ const TopChains = () => {
       const normalizedRaas = chainData?.raas?.trim().toLowerCase();
       const normalizedDA = chainData?.da?.trim().toLowerCase();
       const normalizedFramework = chainData?.framework?.trim().toLowerCase();
-      const chainLogo = chainData?.logo;
 
       return {
         ...chain,
@@ -138,7 +144,6 @@ const TopChains = () => {
         raas: normalizedRaas || "Unknown",
         da: normalizedDA || "Unknown",
         framework: normalizedFramework || "Unknown",
-        logo: chainLogo,
       };
     });
 
@@ -159,18 +164,10 @@ const TopChains = () => {
 
   return (
     <div className="top-chains-container">
-      <h2 className="top-chains-heading">Top 6 Blockchddfdain Chains</h2>
+      <h2 className="top-chains-heading">Top 6 Blockchain Chains</h2>
       <div className="top-chains-cards">
         {topChains.map((chain, index) => (
           <div key={index} className="chain-card" tabIndex="0">
-            {chain.logo && (
-              <img
-                src={chain.logo}
-                alt={`${chain.chainName} Logo`}
-                className="chain-logo"
-                loading="lazy"
-              />
-            )}
             <h3 className="chain-name">{chain.chainName}</h3>
             <p className="chain-transactions">
               Total Transactions: {chain.total.toLocaleString()}
@@ -181,63 +178,22 @@ const TopChains = () => {
             <p className="chain-percentage-increase">
               % Increase Since Last Week: {chain.percentageIncrease}
             </p>
-            <div className="chain-logos">
-              {/* RaaS Logo */}
-              <div
-                className="logo-container raas-logo"
-                aria-label="RaaS"
-                title="RaaS"
-              >
-                {chain.raas && raasLogos[chain.raas] ? (
-                  <img
-                    src={raasLogos[chain.raas]}
-                    alt={`${chain.raas} Logo`}
-                    className="logo"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="logo-placeholder">RaaS</div>
-                )}
-                {/* Tooltip is handled purely via CSS using the title attribute */}
-              </div>
-
-              {/* Data Availability Logo */}
-              <div
-                className="logo-container da-logo"
-                aria-label="Data Availability"
-                title="Data Availability"
-              >
-                {chain.da && daLogos[chain.da] ? (
-                  <img
-                    src={daLogos[chain.da]}
-                    alt={`${chain.da} Logo`}
-                    className="logo"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="logo-placeholder">DA</div>
-                )}
-                {/* Tooltip is handled purely via CSS using the title attribute */}
-              </div>
-
-              {/* Framework Logo */}
-              <div
-                className="logo-container framework-logo"
-                aria-label="Framework"
-                title="Framework"
-              >
-                {chain.framework && frameworkLogos[chain.framework] ? (
-                  <img
-                    src={frameworkLogos[chain.framework]}
-                    alt={`${chain.framework} Logo`}
-                    className="logo"
-                    loading="lazy"
-                  />
-                ) : (
-                  <div className="logo-placeholder">FW</div>
-                )}
-                {/* Tooltip is handled purely via CSS using the title attribute */}
-              </div>
+            <div className="chain-badges">
+              <Badge
+                logo={raasLogos[chain.raas]}
+                category="RaaS"
+                name={chain.raas}
+              />
+              <Badge
+                logo={daLogos[chain.da]}
+                category="Data Availability"
+                name={chain.da}
+              />
+              <Badge
+                logo={frameworkLogos[chain.framework]}
+                category="Framework"
+                name={chain.framework}
+              />
             </div>
           </div>
         ))}

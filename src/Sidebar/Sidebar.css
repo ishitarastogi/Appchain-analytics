@@ -68,11 +68,22 @@
 .sidebar-subcategories li {
   padding: 8px 0;
   font-size: 0.9rem;
-  color: #b0b0b0;
-  transition: color 0.3s ease;
   cursor: pointer;
 }
 
-.sidebar-subcategories li:hover {
-  color: #ffffff;
+/* Updated links for subcategories */
+.subcategory-link {
+  color: #b0b0b0; /* Default color for subcategory links */
+  text-decoration: none; /* Remove underline */
+  transition: color 0.3s ease;
+}
+
+.subcategory-link:hover {
+  color: #ffffff; /* Change to white on hover */
+}
+
+/* Remove default link color styles */
+a {
+  text-decoration: none;
+  color: inherit; /* Inherit color from the parent element */
 }

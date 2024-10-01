@@ -1,193 +1,109 @@
-/* src/components/MainContent/Charts/TopChains.css */
-
-/* Container Styles */
+/* Top Chains Container */
 .top-chains-container {
   background-color: #000;
   color: #fff;
   padding: 20px;
-  margin-left: 25px;
   max-width: 1200px;
   border-radius: 10px;
+  margin-left: 25px;
 }
 
+/* Top Chains Heading */
 .top-chains-heading {
   text-align: center;
-  font-size: 1.8rem;
+  font-size: 2rem;
   margin-bottom: 20px;
+  margin-right: 800px; /* Move title slightly to the right */
 }
 
 /* Cards Container */
 .top-chains-cards {
   display: flex;
   flex-wrap: wrap;
-  gap: 20px;
-  justify-content: center;
+  gap: 20px; /* Spacing between cards */
+  justify-content: space-between; /* Spread cards evenly */
+  margin: 0 auto;
 }
 
-/* Individual Card */
+/* Individual Chain Card */
 .chain-card {
   background-color: #1e1e1e;
-  padding: 20px;
+  padding: 15px; /* Reduced padding for compact layout */
   border-radius: 10px;
-  flex: 1 1 calc(33.333% - 40px); /* Three cards per row with gaps */
-  max-width: 350px; /* Prevent cards from becoming too wide */
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.2);
+  flex: 1 1 calc(48% - 20px); /* Two cards per row with spacing */
+  max-width: 500px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  margin-bottom: 20px;
   display: flex;
   flex-direction: column;
   align-items: center;
-  transition: transform 0.3s, box-shadow 0.3s;
-  box-sizing: border-box; /* Ensure padding is included in width */
 }
 
-.chain-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 8px 12px rgba(0, 0, 0, 0.3);
-}
-
-/* Chain Logo */
-.chain-logo {
-  width: 60px;
-  height: 60px;
-  object-fit: contain;
-  margin-bottom: 15px;
-}
-
-/* Chain Details */
-.chain-name {
-  font-size: 1.4rem;
-  font-weight: bold;
-  margin-bottom: 10px;
-}
-
+/* Chain Details Text */
 .chain-transactions,
 .chain-market-share,
 .chain-percentage-increase {
   text-align: center;
-  margin: 5px 0;
+  margin: 5px 0; /* Reduce gap between text items */
 }
 
-/* Logos Section */
-.chain-logos {
+/* Badges Section */
+.chain-badges {
   display: flex;
-  justify-content: center;
+  justify-content: space-between;
   align-items: center;
-  gap: 10px; /* Controlled spacing between logos */
+  gap: 15px; /* Space between badges */
   margin-top: 15px;
 }
 
-/* Logo Containers */
-.logo-container {
-  position: relative; /* To position the tooltip correctly */
-  width: 40px; /* Reduced size for better aesthetics */
-  height: 40px;
-  border-radius: 50%;
-  overflow: hidden;
-  border: 2px solid #fff; /* Optional: Adds a border around logos */
-  background-color: #fff; /* Fallback background */
-  transition: transform 0.3s;
-  cursor: pointer; /* Indicate interactivity */
+/* Badge Container */
+.badge-container {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
   align-items: center;
-}
-
-/* Logo Images */
-.logo-container img.logo {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  border-radius: 50%;
-}
-
-/* Logo Placeholder Styling */
-.logo-container .logo-placeholder {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  background-color: #555; /* Background color for placeholder */
-  color: #fff;
-  font-size: 0.8rem;
   text-align: center;
-  border-radius: 50%;
-}
-
-/* Custom Tooltip Styling using Pseudo-Elements */
-.logo-container::after {
-  content: attr(title); /* Use the title attribute for tooltip text */
-  position: absolute;
-  bottom: -30px; /* Position the tooltip below the logo */
-  left: 50%;
-  transform: translateX(-50%);
-  background-color: rgba(0, 0, 0, 0.8);
+  border: 2px solid #fff; /* Only border with transparent background */
+  border-radius: 8px;
+  padding: 10px;
+  width: 90px; /* Consistent badge width */
+  height: 90px; /* Compact height */
   color: #fff;
-  padding: 5px 8px;
-  border-radius: 4px;
+  transition: transform 0.3s;
+  margin-bottom: 10px;
+}
+
+.badge-container:hover {
+  transform: scale(1.05);
+}
+
+/* Badge Logo */
+.badge-logo {
+  width: 35px; /* Reduced logo size for balance */
+  height: 35px;
+  overflow: hidden;
+  margin-bottom: 5px;
+}
+
+.badge-logo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Badge Details */
+.badge-details {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px; /* Spacing between category and name */
+}
+
+.badge-category {
   font-size: 0.75rem;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.3s;
-  z-index: 10;
+  font-weight: bold;
+  margin-bottom: 2px;
 }
 
-/* Tooltip Arrow */
-.logo-container::before {
-  content: "";
-  position: absolute;
-  bottom: -10px; /* Position the arrow above the tooltip */
-  left: 50%;
-  transform: translateX(-50%);
-  border-width: 5px;
-  border-style: solid;
-  border-color: rgba(0, 0, 0, 0.8) transparent transparent transparent;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.3s;
-  z-index: 10;
-}
-
-/* Show Tooltip on Hover */
-.logo-container:hover::after,
-.logo-container:hover::before {
-  opacity: 1;
-}
-
-/* Optional: Slight scale effect on logos when hovered */
-.logo-container:hover {
-  transform: scale(1.1);
-}
-
-/* Responsive Design */
-@media (max-width: 1000px) {
-  .chain-card {
-    flex: 1 1 calc(50% - 40px); /* Two cards per row */
-  }
-}
-
-@media (max-width: 600px) {
-  .chain-card {
-    flex: 1 1 100%; /* Single card per row */
-  }
-
-  .logo-container {
-    width: 35px;
-    height: 35px;
-  }
-
-  /* Adjust tooltip position for smaller screens if needed */
-  .logo-container::after {
-    bottom: -25px;
-    font-size: 0.7rem;
-  }
-
-  .logo-container::before {
-    bottom: -15px;
-    border-width: 4px;
-  }
-
-  .chain-logos {
-    gap: 8px; /* Slightly reduce spacing on smaller screens */
-  }
+.badge-name {
+  font-size: 0.7rem;
 }

@@ -29,9 +29,21 @@ const Sidebar = () => {
           <FontAwesomeIcon icon={faLink} /> Chain Performance
         </li>
         <ul className="sidebar-subcategories">
-          <li>Daily Transactions</li>
-          <li>Active Accounts</li>
-          <li>TPS</li>
+          <li>
+            <Link to="/daily-transactions" className="subcategory-link">
+              Daily Transactions
+            </Link>
+          </li>
+          <li>
+            <Link to="/active-accounts" className="subcategory-link">
+              Active Accounts
+            </Link>
+          </li>
+          <li>
+            <Link to="/tps" className="subcategory-link">
+              TPS
+            </Link>
+          </li>
         </ul>
 
         {/* Value Locked Category */}
@@ -39,8 +51,16 @@ const Sidebar = () => {
           <FontAwesomeIcon icon={faWallet} /> Value Locked
         </li>
         <ul className="sidebar-subcategories">
-          <li>Total Value Locked (TVL)</li>
-          <li>Stablecoin</li>
+          <li>
+            <Link to="/tvl" className="subcategory-link">
+              Total Value Locked (TVL)
+            </Link>
+          </li>
+          <li>
+            <Link to="/stablecoin" className="subcategory-link">
+              Stablecoin
+            </Link>
+          </li>
         </ul>
 
         {/* Ecosystem Category */}
