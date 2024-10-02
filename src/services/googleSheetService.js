@@ -3,8 +3,19 @@
 import axios from "axios";
 import moment from "moment";
 
+// Cache Key Constants
+const CACHE_KEY_SHEET_DATA = "googleSheetData_Gelato";
+const CACHE_KEY_TRANSACTIONS_PREFIX = "transactionsData_Gelato_";
+const CACHE_TIMESTAMP_KEY_PREFIX = "transactionsDataTimestamp_Gelato_";
+
 // Fetch Google Sheets Data
 export const fetchGoogleSheetData = async () => {
+  const cachedData = localStorage.getItem(CACHE_KEY_SHEET_DATA);
+  if (cachedData) {
+    console.log("Using cached Google Sheets data.");
+    return JSON.parse(cachedData);
+  }
+
   const apiKey = process.env.REACT_APP_GOOGLE_SHEETS_API_KEY;
   const GOOGLE_SHEET_URL = `https://sheets.googleapis.com/v4/spreadsheets/1z-wz6qNOb2Zs7d3xnPjhl004YhIuov-ecd60JzffaNM/values/Sheet1!A2:Z1000?key=${apiKey}`;
 
@@ -22,25 +33,30 @@ export const fetchGoogleSheetData = async () => {
       throw new Error("No data returned from Google Sheets API.");
     }
 
-    const mappedData = rows.map((row) => ({
-      name: row[0],
-      blockScoutUrl: row[1],
-      id: row[2],
-      website: row[3],
-      raas: row[4],
-      year: row[5],
-      quarter: row[6],
-      month: row[7],
-      launchDate: row[8],
-      vertical: row[9],
-      framework: row[10],
-      da: row[11],
-      l2OrL3: row[12],
-      settlementWhenL3: row[13],
-      logo: row[14],
-    }));
+    const mappedData = rows
+      .map((row) => ({
+        name: row[0],
+        blockScoutUrl: row[1],
+        id: row[2],
+        website: row[3],
+        raas: row[4],
+        year: row[5],
+        quarter: row[6],
+        month: row[7],
+        launchDate: row[8],
+        vertical: row[9],
+        framework: row[10],
+        da: row[11],
+        l2OrL3: row[12],
+        settlementWhenL3: row[13],
+        logo: row[14],
+      }))
+      .filter((chain) => chain.raas.toLowerCase() === "gelato"); // Dynamic Filtering
 
-    console.log("Mapped Google Sheet data:", mappedData);
+    console.log("Mapped and Filtered Google Sheet data:", mappedData);
+
+    // Cache the sheet data
+    localStorage.setItem(CACHE_KEY_SHEET_DATA, JSON.stringify(mappedData));
 
     return mappedData;
   } catch (error) {
@@ -49,16 +65,42 @@ export const fetchGoogleSheetData = async () => {
   }
 };
 
-// src/services/googleSheetService.js
-
-export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
+// Fetch Block Explorer Data with Dynamic Date Ranges
+export const fetchBlockExplorerData = async (
+  blockScoutUrl,
+  launchDate,
+  timeRange = "Daily"
+) => {
   const normalizedUrl = blockScoutUrl.replace(/\/+$/, "");
   const formattedLaunchDate = moment(new Date(launchDate)).format("YYYY-MM-DD");
   const currentDate = moment().format("YYYY-MM-DD");
 
-  const transactionsApiUrl = encodeURIComponent(
-    `${normalizedUrl}/api/v1/lines/newTxns?from=${formattedLaunchDate}&to=${currentDate}`
-  );
+  let fromDate = formattedLaunchDate;
+  let toDate = currentDate;
+
+  // Adjust date ranges based on timeRange
+  switch (timeRange) {
+    case "Daily":
+      fromDate = currentDate;
+      break;
+    case "Monthly":
+      fromDate = moment(currentDate).subtract(1, "months").format("YYYY-MM-DD");
+      break;
+    case "SixMonths":
+      fromDate = moment(currentDate).subtract(6, "months").format("YYYY-MM-DD");
+      break;
+    case "FourMonths":
+      fromDate = moment(currentDate).subtract(4, "months").format("YYYY-MM-DD");
+      break;
+    case "All":
+      fromDate = formattedLaunchDate;
+      break;
+    default:
+      fromDate = formattedLaunchDate;
+      break;
+  }
+
+  const transactionsApiUrl = `${normalizedUrl}/api/v1/lines/newTxns?from=${fromDate}&to=${toDate}`;
 
   const proxyBaseUrl = "/api/proxy?url=";
 
@@ -66,15 +108,23 @@ export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
   console.log("BlockScout URL:", blockScoutUrl);
   console.log("Normalized URL:", normalizedUrl);
   console.log("Formatted Launch Date:", formattedLaunchDate);
-  console.log("Current Date:", currentDate);
-  console.log("Transactions API URL:", decodeURIComponent(transactionsApiUrl));
+  console.log("From Date:", fromDate);
+  console.log("To Date:", toDate);
+  console.log("Transactions API URL:", transactionsApiUrl);
 
   try {
-    const requestUrl = `${proxyBaseUrl}${transactionsApiUrl}`;
+    const requestUrl = `${proxyBaseUrl}${encodeURIComponent(
+      transactionsApiUrl
+    )}`;
     console.log("Full request URL:", requestUrl);
 
     const transactionsResponse = await axios.get(requestUrl);
     console.log("Block explorer API response:", transactionsResponse.data);
+
+    if (!transactionsResponse.data || !transactionsResponse.data.chart) {
+      console.error("Invalid response structure:", transactionsResponse.data);
+      return { transactions: [] };
+    }
 
     return {
       transactions: transactionsResponse.data.chart.map((item) => ({
@@ -91,7 +141,26 @@ export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
   }
 };
 
-export const fetchAllTransactions = async (sheetData) => {
+// Fetch All Transactions with Time Range and Implement Caching
+export const fetchAllTransactions = async (sheetData, timeRange) => {
+  // Define cache keys based on timeRange
+  const CACHE_KEY_TRANSACTIONS = `${CACHE_KEY_TRANSACTIONS_PREFIX}${timeRange}`;
+  const CACHE_TIMESTAMP_KEY = `${CACHE_TIMESTAMP_KEY_PREFIX}${timeRange}`;
+
+  // Check if cached data exists and is not older than 6 hours
+  const cachedTransactions = localStorage.getItem(CACHE_KEY_TRANSACTIONS);
+  const cachedTimestamp = localStorage.getItem(CACHE_TIMESTAMP_KEY);
+  const sixHoursAgo = moment().subtract(6, "hours");
+
+  if (
+    cachedTransactions &&
+    cachedTimestamp &&
+    moment(cachedTimestamp).isAfter(sixHoursAgo)
+  ) {
+    console.log("Using cached transactions data for time range:", timeRange);
+    return JSON.parse(cachedTransactions);
+  }
+
   let totalTransactionsCombined = 0;
   const transactionDataByWeek = {};
   const transactionsByChain = {};
@@ -102,7 +171,7 @@ export const fetchAllTransactions = async (sheetData) => {
       if (!transactionDataByWeek[week]) {
         transactionDataByWeek[week] = 0;
       }
-      transactionDataByWeek[week] += parseInt(value, 10);
+      transactionDataByWeek[week] += value;
 
       if (!transactionsByChain[chainName]) {
         transactionsByChain[chainName] = {};
@@ -110,9 +179,9 @@ export const fetchAllTransactions = async (sheetData) => {
       if (!transactionsByChain[chainName][week]) {
         transactionsByChain[chainName][week] = 0;
       }
-      transactionsByChain[chainName][week] += parseInt(value, 10);
+      transactionsByChain[chainName][week] += value;
 
-      totalTransactionsCombined += parseInt(value, 10);
+      totalTransactionsCombined += value;
     });
   };
 
@@ -121,7 +190,8 @@ export const fetchAllTransactions = async (sheetData) => {
     try {
       const { transactions } = await fetchBlockExplorerData(
         blockScoutUrl,
-        launchDate
+        launchDate,
+        timeRange
       );
       processTransactionData(transactions, name);
     } catch (error) {
@@ -129,9 +199,18 @@ export const fetchAllTransactions = async (sheetData) => {
     }
   }
 
-  return {
+  const transactionsData = {
     transactionDataByWeek,
     transactionsByChain,
     totalTransactionsCombined,
   };
+
+  // Cache the transactions data with current timestamp
+  localStorage.setItem(
+    CACHE_KEY_TRANSACTIONS,
+    JSON.stringify(transactionsData)
+  );
+  localStorage.setItem(CACHE_TIMESTAMP_KEY, moment().toISOString());
+
+  return transactionsData;
 };
