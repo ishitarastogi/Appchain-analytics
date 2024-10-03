@@ -165,39 +165,43 @@ const TopChains = () => {
   return (
     <div className="top-chains-container">
       <h2 className="top-chains-heading">Top 6 Blockchain Chains</h2>
-      <div className="top-chains-cards">
-        {topChains.map((chain, index) => (
-          <div key={index} className="chain-card" tabIndex="0">
-            <h3 className="chain-name">{chain.chainName}</h3>
-            <p className="chain-transactions">
-              Total Transactions: {chain.total.toLocaleString()}
-            </p>
-            <p className="chain-market-share">
-              Market Share: {chain.marketShare}
-            </p>
-            <p className="chain-percentage-increase">
-              % Increase Since Last Week: {chain.percentageIncrease}
-            </p>
-            <div className="chain-badges">
-              <Badge
-                logo={raasLogos[chain.raas]}
-                category="RaaS"
-                name={chain.raas}
-              />
-              <Badge
-                logo={daLogos[chain.da]}
-                category="Data Availability"
-                name={chain.da}
-              />
-              <Badge
-                logo={frameworkLogos[chain.framework]}
-                category="Framework"
-                name={chain.framework}
-              />
+      {topChains.length > 0 ? (
+        <div className="top-chains-cards">
+          {topChains.map((chain, index) => (
+            <div key={index} className="chain-card" tabIndex="0">
+              <h3 className="chain-name">{chain.chainName}</h3>
+              <p className="chain-transactions">
+                Total Transactions: {chain.total.toLocaleString()}
+              </p>
+              <p className="chain-market-share">
+                Market Share: {chain.marketShare}
+              </p>
+              <p className="chain-percentage-increase">
+                % Increase Since Last Week: {chain.percentageIncrease}
+              </p>
+              <div className="chain-badges">
+                <Badge
+                  logo={raasLogos[chain.raas]}
+                  category="RaaS"
+                  name={chain.raas}
+                />
+                <Badge
+                  logo={daLogos[chain.da]}
+                  category="Data Availability"
+                  name={chain.da}
+                />
+                <Badge
+                  logo={frameworkLogos[chain.framework]}
+                  category="Framework"
+                  name={chain.framework}
+                />
+              </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      ) : (
+        <p>Loading data...</p>
+      )}
     </div>
   );
 };
