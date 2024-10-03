@@ -1,3 +1,5 @@
+// DailyTransactionsPage.js
+
 import React, { useState, useEffect } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -23,6 +25,7 @@ import {
   fetchAllTransactions,
 } from "../services/googleSheetService";
 import { abbreviateNumber } from "../utils/numberFormatter";
+import moment from "moment";
 
 // Register required components for Chart.js
 ChartJS.register(
@@ -43,6 +46,7 @@ const DailyTransactionsPage = () => {
   const [gelatoChains, setGelatoChains] = useState([]);
   const [allChains, setAllChains] = useState([]);
   const [transactionsByChain, setTransactionsByChain] = useState({});
+  const [transactionsByChainDate, setTransactionsByChainDate] = useState({});
   const [chartData, setChartData] = useState({
     labels: [],
     datasets: [],
@@ -51,6 +55,7 @@ const DailyTransactionsPage = () => {
   const [totalTransactionsByChain, setTotalTransactionsByChain] = useState({});
   const [transactionsByRaas, setTransactionsByRaas] = useState({});
   const [error, setError] = useState(null);
+  const [filteredDates, setFilteredDates] = useState([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -66,42 +71,58 @@ const DailyTransactionsPage = () => {
         // Fetch transactions data for all chains
         const transactionsData = await fetchAllTransactions(sheetData);
         setTransactionsByChain(transactionsData.transactionsByChain);
+        setTransactionsByChainDate(transactionsData.transactionsByChainDate);
 
-        // Determine Top 7 Chains based on transaction counts
+        // Function to get filtered dates based on timeRange
+        const getFilteredDates = () => {
+          const today = moment();
+          let startDate;
+          switch (timeRange) {
+            case "Daily":
+              startDate = today.clone().startOf("day");
+              break;
+            case "Monthly":
+              startDate = today.clone().subtract(1, "months").startOf("day");
+              break;
+            case "FourMonths":
+              startDate = today.clone().subtract(4, "months").startOf("day");
+              break;
+            case "SixMonths":
+              startDate = today.clone().subtract(6, "months").startOf("day");
+              break;
+            case "All":
+              startDate = moment("2000-01-01");
+              break;
+            default:
+              startDate = today.clone().subtract(1, "months").startOf("day");
+          }
+          const dates = [];
+          let currentDate = startDate.clone();
+          while (currentDate.isSameOrBefore(today, "day")) {
+            dates.push(currentDate.format("YYYY-MM-DD"));
+            currentDate.add(1, "day");
+          }
+          return dates;
+        };
+
+        const dates = getFilteredDates();
+        setFilteredDates(dates);
+
+        // Calculate transaction counts for each chain based on timeRange
         const chainTotals = sheetData.map((chain) => {
-          const total = Object.values(
-            transactionsData.transactionsByChain[chain.name] || {}
-          ).reduce((acc, val) => acc + val, 0);
+          const transactionCounts = dates.map(
+            (date) => transactionsByChainDate[chain.name]?.[date] || 0
+          );
+          const total = transactionCounts.reduce((acc, val) => acc + val, 0);
           return { name: chain.name, total };
         });
 
+        // Determine Top 7 Chains based on transaction counts
         chainTotals.sort((a, b) => b.total - a.total);
-
         const topSevenChains = chainTotals
           .slice(0, 7)
           .map((chain) => chain.name);
         setTopChains(topSevenChains);
-
-        // Prepare line chart data for the top 7 chains
-        const labels = Object.keys(
-          transactionsData.transactionDataByWeek
-        ).sort();
-        const datasets = topSevenChains.map((chainName) => ({
-          label: chainName,
-          data: labels.map(
-            (week) =>
-              transactionsData.transactionsByChain[chainName]?.[week] || 0
-          ),
-          fill: false,
-          borderColor: getColorForChain(chainName),
-          backgroundColor: getColorForChain(chainName),
-          tension: 0.1,
-        }));
-
-        setChartData({
-          labels,
-          datasets,
-        });
 
         // Prepare data for pie and bar charts
         const totalTransactionsByChainData = chainTotals.reduce(
@@ -121,8 +142,34 @@ const DailyTransactionsPage = () => {
         }, {});
         setTransactionsByRaas(transactionsByRaasData);
 
-        // Console log for debugging Caldera transactions
-        console.log("Caldera Transactions:", transactionsByRaasData["Caldera"]);
+        // Prepare line chart data for the last 6 months
+        const getLastSixMonthsWeeks = () => {
+          const startDate = moment().subtract(6, "months").startOf("isoWeek");
+          const endDate = moment().startOf("isoWeek");
+          const weeks = [];
+          let currentWeek = startDate.clone();
+          while (currentWeek.isSameOrBefore(endDate, "week")) {
+            weeks.push(currentWeek.format("YYYY-[W]WW"));
+            currentWeek.add(1, "weeks");
+          }
+          return weeks;
+        };
+
+        const labels = getLastSixMonthsWeeks();
+        const datasets = topSevenChains.map((chainName) => ({
+          label: chainName,
+          data: labels.map(
+            (week) => transactionsByChain[chainName]?.[week] || 0
+          ),
+          fill: false,
+          borderColor: getColorForChain(chainName),
+          backgroundColor: getColorForChain(chainName),
+          tension: 0.1,
+        }));
+        setChartData({
+          labels,
+          datasets,
+        });
       } catch (error) {
         console.error("Error during data fetching:", error);
         setError("Failed to load transaction data. Please try again later.");
@@ -277,10 +324,10 @@ const DailyTransactionsPage = () => {
               Monthly
             </button>
             <button
-              className={timeRange === "All" ? "active" : ""}
-              onClick={() => handleTimeRangeChange("All")}
+              className={timeRange === "FourMonths" ? "active" : ""}
+              onClick={() => handleTimeRangeChange("FourMonths")}
             >
-              All
+              4 Months
             </button>
             <button
               className={timeRange === "SixMonths" ? "active" : ""}
@@ -289,10 +336,10 @@ const DailyTransactionsPage = () => {
               6 Months
             </button>
             <button
-              className={timeRange === "FourMonths" ? "active" : ""}
-              onClick={() => handleTimeRangeChange("FourMonths")}
+              className={timeRange === "All" ? "active" : ""}
+              onClick={() => handleTimeRangeChange("All")}
             >
-              4 Months
+              All
             </button>
           </div>
         </div>
@@ -302,9 +349,13 @@ const DailyTransactionsPage = () => {
           {/* Gelato Chain List */}
           <div className="chain-list">
             {gelatoChains.map((chain, index) => {
-              const transactionCount = Object.values(
-                transactionsByChain[chain.name] || {}
-              ).reduce((acc, val) => acc + val, 0);
+              const transactionCounts = filteredDates.map(
+                (date) => transactionsByChainDate[chain.name]?.[date] || 0
+              );
+              const transactionCount = transactionCounts.reduce(
+                (acc, val) => acc + val,
+                0
+              );
 
               return (
                 <div key={index} className="chain-item">
@@ -344,7 +395,7 @@ const DailyTransactionsPage = () => {
                   },
                   title: {
                     display: true,
-                    text: `Transactions - ${timeRange}`,
+                    text: `Transactions - Last 6 Months`,
                     color: "#FFFFFF",
                   },
                   tooltip: {
@@ -364,7 +415,7 @@ const DailyTransactionsPage = () => {
                   x: {
                     title: {
                       display: true,
-                      text: "Time",
+                      text: "Time (Weeks)",
                       color: "#FFFFFF",
                     },
                     ticks: {

@@ -3,6 +3,7 @@
   background-color: #000; /* Black background */
   color: #ffffff; /* White text color for better contrast */
   height: 100vh; /* Full screen height */
+  overflow: hidden;
 }
 
 /* Sidebar */
@@ -20,6 +21,7 @@
   width: calc(100% - 240px);
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
 }
 
 /* Currency Toggle */
@@ -180,4 +182,31 @@
 /* Line Chart Section */
 .line-chart {
   flex-basis: 50%;
+  max-height: 400px; /* Restrict the height of the line chart */
+}
+
+/* Additional Charts Section */
+.additional-charts {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 20px 35px;
+}
+
+.pie-chart,
+.bar-chart {
+  flex-basis: 45%;
+  max-height: 300px; /* Adjust size to make charts smaller */
+  background-color: #1c1c1c; /* Consistent background color */
+  padding: 15px;
+  border-radius: 10px;
+  border: 1px solid #333; /* Border for chart containers */
+}
+
+/* Chart Titles */
+.pie-chart h3,
+.bar-chart h3 {
+  color: #ff3b57; /* Heading color for charts */
+  text-align: center;
+  margin-bottom: 15px;
 }

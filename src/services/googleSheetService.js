@@ -1,3 +1,5 @@
+// googleSheetService.js
+
 import axios from "axios";
 import moment from "moment";
 
@@ -32,7 +34,7 @@ export const fetchGoogleSheetData = async () => {
   }
 };
 
-// Fetch Block Explorer Data for a single chain (transactions and active accounts)
+// Fetch Block Explorer Data for a single chain (transactions)
 export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
   const normalizedUrl = blockScoutUrl.replace(/\/+$/, "");
   const formattedLaunchDate = moment(new Date(launchDate)).format("YYYY-MM-DD");
@@ -68,29 +70,43 @@ export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
   }
 };
 
-// Function to calculate weekly transactions across all chains
+// Updated function to calculate transactions across all chains
 export const fetchAllTransactions = async (sheetData) => {
   let totalTransactionsCombined = 0;
   const transactionDataByWeek = {};
   const transactionsByChain = {};
+  const transactionsByChainDate = {}; // New addition
 
   const processTransactionData = (transactions, chainName) => {
     transactions.forEach(({ date, value }) => {
-      const week = moment(date).startOf("isoWeek").format("YYYY-WW");
+      const week = moment(date).startOf("isoWeek").format("YYYY-[W]WW");
+      const parsedValue = parseInt(value, 10);
+
+      // Aggregate by week
       if (!transactionDataByWeek[week]) {
         transactionDataByWeek[week] = 0;
       }
-      transactionDataByWeek[week] += parseInt(value, 10);
+      transactionDataByWeek[week] += parsedValue;
 
+      // Aggregate by chain and week
       if (!transactionsByChain[chainName]) {
         transactionsByChain[chainName] = {};
       }
       if (!transactionsByChain[chainName][week]) {
         transactionsByChain[chainName][week] = 0;
       }
-      transactionsByChain[chainName][week] += parseInt(value, 10);
+      transactionsByChain[chainName][week] += parsedValue;
 
-      totalTransactionsCombined += parseInt(value, 10);
+      // Aggregate by chain and date
+      if (!transactionsByChainDate[chainName]) {
+        transactionsByChainDate[chainName] = {};
+      }
+      if (!transactionsByChainDate[chainName][date]) {
+        transactionsByChainDate[chainName][date] = 0;
+      }
+      transactionsByChainDate[chainName][date] += parsedValue;
+
+      totalTransactionsCombined += parsedValue;
     });
   };
 
@@ -110,6 +126,7 @@ export const fetchAllTransactions = async (sheetData) => {
   return {
     transactionDataByWeek,
     transactionsByChain,
+    transactionsByChainDate, // Return the new data
     totalTransactionsCombined,
   };
 };

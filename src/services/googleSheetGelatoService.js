@@ -1,3 +1,5 @@
+// googleSheetGelatoService.js
+
 import axios from "axios";
 
 // Fetch Google Sheets Data specifically for Gelato chains
@@ -13,6 +15,7 @@ export const fetchGelatoSheetData = async () => {
         name: row[0],
         blockScoutUrl: row[1],
         raas: row[4],
+        launchDate: row[8],
       }))
       .filter((chain) => chain.raas.toLowerCase() === "gelato");
   } catch (error) {
