@@ -30,7 +30,7 @@
     "test": "react-scripts test",
     "eject": "react-scripts eject",
     "serve": "serve -s build",
-    "vercel-build": "npm run build",
+    "vercel-build": "CI= npm run build",
     "start-backend": "node server/proxy.js"
   },
   "eslintConfig": {

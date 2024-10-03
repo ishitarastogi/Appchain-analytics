@@ -1,10 +1,8 @@
-// src/components/DailyTransactionsPage.js
-
 import React, { useState, useEffect } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChartLine } from "@fortawesome/free-solid-svg-icons";
-import GelatoLogo from "../assets/logos/raas/Gelato.png"; // Placeholder for RaaS logos
+import GelatoLogo from "../assets/logos/raas/Gelato.png";
 import "./DailyTransactionsPage.css";
 import {
   Chart as ChartJS,
@@ -15,8 +13,11 @@ import {
   Title,
   Tooltip,
   Legend,
+  ArcElement,
+  BarElement,
 } from "chart.js";
-import { Line } from "react-chartjs-2";
+import { Line, Pie, Bar } from "react-chartjs-2";
+import { fetchGelatoSheetData } from "../services/googleSheetGelatoService";
 import {
   fetchGoogleSheetData,
   fetchAllTransactions,
@@ -31,43 +32,42 @@ ChartJS.register(
   LinearScale,
   Title,
   Tooltip,
-  Legend
+  Legend,
+  ArcElement,
+  BarElement
 );
 
 const DailyTransactionsPage = () => {
-  const [currency, setCurrency] = useState("ETH"); // Default to ETH
-  const [timeRange, setTimeRange] = useState("Daily"); // Default to Daily
+  const [currency, setCurrency] = useState("ETH");
+  const [timeRange, setTimeRange] = useState("Monthly");
   const [gelatoChains, setGelatoChains] = useState([]);
+  const [allChains, setAllChains] = useState([]);
   const [transactionsByChain, setTransactionsByChain] = useState({});
   const [chartData, setChartData] = useState({
     labels: [],
     datasets: [],
   });
   const [topChains, setTopChains] = useState([]);
+  const [totalTransactionsByChain, setTotalTransactionsByChain] = useState({});
+  const [transactionsByRaas, setTransactionsByRaas] = useState({});
   const [error, setError] = useState(null);
 
-  // Fetch chain data from Google Sheets when component mounts or timeRange changes
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Fetch Gelato-specific data
+        const gelatoData = await fetchGelatoSheetData();
+        setGelatoChains(gelatoData);
+
+        // Fetch data for all chains
         const sheetData = await fetchGoogleSheetData();
-        console.log("Fetched Google Sheet data:", sheetData);
+        setAllChains(sheetData);
 
-        setGelatoChains(sheetData);
-
-        // Fetch transactions data for all Gelato chains based on timeRange
-        const transactionsData = await fetchAllTransactions(
-          sheetData,
-          timeRange
-        );
-        console.log(
-          "Fetched transactions for Gelato chains:",
-          transactionsData
-        );
-
+        // Fetch transactions data for all chains
+        const transactionsData = await fetchAllTransactions(sheetData);
         setTransactionsByChain(transactionsData.transactionsByChain);
 
-        // Determine Top 5 Chains based on transaction counts
+        // Determine Top 7 Chains based on transaction counts
         const chainTotals = sheetData.map((chain) => {
           const total = Object.values(
             transactionsData.transactionsByChain[chain.name] || {}
@@ -75,21 +75,18 @@ const DailyTransactionsPage = () => {
           return { name: chain.name, total };
         });
 
-        // Sort chains by total transactions in descending order
         chainTotals.sort((a, b) => b.total - a.total);
 
-        // Select top 5 chains
-        const topFiveChains = chainTotals
-          .slice(0, 5)
+        const topSevenChains = chainTotals
+          .slice(0, 7)
           .map((chain) => chain.name);
-        setTopChains(topFiveChains);
-        console.log("Top 5 Chains:", topFiveChains);
+        setTopChains(topSevenChains);
 
-        // Prepare data for the chart
+        // Prepare line chart data for the top 7 chains
         const labels = Object.keys(
           transactionsData.transactionDataByWeek
         ).sort();
-        const datasets = topFiveChains.map((chainName) => ({
+        const datasets = topSevenChains.map((chainName) => ({
           label: chainName,
           data: labels.map(
             (week) =>
@@ -105,6 +102,27 @@ const DailyTransactionsPage = () => {
           labels,
           datasets,
         });
+
+        // Prepare data for pie and bar charts
+        const totalTransactionsByChainData = chainTotals.reduce(
+          (acc, { name, total }) => ({ ...acc, [name]: total }),
+          {}
+        );
+        setTotalTransactionsByChain(totalTransactionsByChainData);
+
+        // Calculate transactions by RaaS
+        const transactionsByRaasData = sheetData.reduce((acc, chain) => {
+          const raasProvider = chain.raas;
+          if (!acc[raasProvider]) {
+            acc[raasProvider] = 0;
+          }
+          acc[raasProvider] += totalTransactionsByChainData[chain.name] || 0;
+          return acc;
+        }, {});
+        setTransactionsByRaas(transactionsByRaasData);
+
+        // Console log for debugging Caldera transactions
+        console.log("Caldera Transactions:", transactionsByRaasData["Caldera"]);
       } catch (error) {
         console.error("Error during data fetching:", error);
         setError("Failed to load transaction data. Please try again later.");
@@ -123,7 +141,7 @@ const DailyTransactionsPage = () => {
     setTimeRange(range);
   };
 
-  // Utility function to assign consistent colors for each chain
+  // Utility functions
   const getColorForChain = (chainName) => {
     const colorMap = {
       Playnance: "#FF6384",
@@ -138,12 +156,11 @@ const DailyTransactionsPage = () => {
       "Event Horizon": "#FF6384",
       Arenaz: "#FFCE56",
       "Edu Chain": "#4BC0C0",
-      // Add more mappings as needed
+      Caldera: "#EC6731",
     };
-    return colorMap[chainName] || getRandomColor(); // Default to random color if not mapped
+    return colorMap[chainName] || getRandomColor();
   };
 
-  // Utility function to generate random colors for unmapped chains
   const getRandomColor = () => {
     const letters = "0123456789ABCDEF";
     let color = "#";
@@ -153,14 +170,61 @@ const DailyTransactionsPage = () => {
     return color;
   };
 
+  // Prepare the data for the bar chart, excluding any provider with zero transactions
+  const filteredTransactionsByRaas = Object.keys(transactionsByRaas).reduce(
+    (acc, provider) => {
+      if (transactionsByRaas[provider] > 0) {
+        acc[provider] = transactionsByRaas[provider];
+      }
+      return acc;
+    },
+    {}
+  );
+
+  // Pie Chart Data
+  const pieData = {
+    labels: [...Object.keys(totalTransactionsByChain).slice(0, 12), "Others"],
+    datasets: [
+      {
+        data: [
+          ...Object.values(totalTransactionsByChain).slice(0, 12),
+          Object.values(totalTransactionsByChain)
+            .slice(12)
+            .reduce((acc, val) => acc + val, 0),
+        ],
+        backgroundColor: [
+          ...Object.keys(totalTransactionsByChain)
+            .slice(0, 12)
+            .map((chain) => getColorForChain(chain)),
+          "#808080", // Grey color for 'Others'
+        ],
+      },
+    ],
+  };
+
+  // Bar Chart Data
+  const barData = {
+    labels: Object.keys(filteredTransactionsByRaas),
+    datasets: [
+      {
+        label: "Transaction Count by RaaS Provider",
+        data: Object.values(filteredTransactionsByRaas),
+        backgroundColor: [
+          "#ff3b57", // Gelato
+          "#46BDC6", // Conduit
+          "#4185F4", // Alchemy
+          "#EC6731", // Caldera
+          "#B28AFE", // Altlayer
+        ].slice(0, Object.keys(filteredTransactionsByRaas).length),
+      },
+    ],
+  };
+
   return (
     <div className="daily-transactions-page">
-      {/* Sidebar */}
       <Sidebar />
-
-      {/* Main Content */}
       <div className="main-content">
-        {/* Top-right Currency Toggle */}
+        {/* Currency Toggle */}
         <div className="currency-toggle">
           <div className="toggle-container">
             <button
@@ -212,8 +276,6 @@ const DailyTransactionsPage = () => {
             >
               Monthly
             </button>
-          </div>
-          <div className="time-range-right">
             <button
               className={timeRange === "All" ? "active" : ""}
               onClick={() => handleTimeRangeChange("All")}
@@ -237,19 +299,12 @@ const DailyTransactionsPage = () => {
 
         {/* Table and Chart Section */}
         <div className="table-chart-container">
-          {/* Custom Chain List */}
+          {/* Gelato Chain List */}
           <div className="chain-list">
             {gelatoChains.map((chain, index) => {
-              // Get the transaction count for the selected time range
               const transactionCount = Object.values(
                 transactionsByChain[chain.name] || {}
               ).reduce((acc, val) => acc + val, 0);
-
-              const abbreviatedCount = abbreviateNumber(transactionCount);
-
-              console.log(
-                `Chain: ${chain.name}, Time Range: ${timeRange}, Transactions: ${transactionCount}`
-              ); // Debugging log
 
               return (
                 <div key={index} className="chain-item">
@@ -269,7 +324,6 @@ const DailyTransactionsPage = () => {
                   <span className="transactions">
                     {abbreviateNumber(transactionCount)}
                   </span>
-                  <span className="purpose">{chain.vertical || "Unknown"}</span>
                 </div>
               );
             })}
@@ -283,15 +337,15 @@ const DailyTransactionsPage = () => {
                 responsive: true,
                 plugins: {
                   legend: {
-                    position: "bottom", // Move legend to the bottom
+                    position: "bottom",
                     labels: {
-                      color: "#FFFFFF", // Legend labels in white
+                      color: "#FFFFFF",
                     },
                   },
                   title: {
                     display: true,
                     text: `Transactions - ${timeRange}`,
-                    color: "#FFFFFF", // Title in white
+                    color: "#FFFFFF",
                   },
                   tooltip: {
                     callbacks: {
@@ -301,7 +355,7 @@ const DailyTransactionsPage = () => {
                         )}`;
                       },
                     },
-                    backgroundColor: "rgba(0,0,0,0.7)", // Tooltip background
+                    backgroundColor: "rgba(0,0,0,0.7)",
                     titleColor: "#FFFFFF",
                     bodyColor: "#FFFFFF",
                   },
@@ -311,10 +365,10 @@ const DailyTransactionsPage = () => {
                     title: {
                       display: true,
                       text: "Time",
-                      color: "#FFFFFF", // x-axis title in white
+                      color: "#FFFFFF",
                     },
                     ticks: {
-                      color: "#FFFFFF", // x-axis labels in white
+                      color: "#FFFFFF",
                       maxRotation: 0,
                       minRotation: 0,
                     },
@@ -323,11 +377,85 @@ const DailyTransactionsPage = () => {
                     title: {
                       display: true,
                       text: "Number of Transactions",
-                      color: "#FFFFFF", // y-axis title in white
+                      color: "#FFFFFF",
                     },
                     ticks: {
-                      color: "#FFFFFF", // y-axis labels in white
+                      color: "#FFFFFF",
                       beginAtZero: true,
+                      callback: function (value) {
+                        return abbreviateNumber(value);
+                      },
+                    },
+                  },
+                },
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Additional Chart Section */}
+        <div className="additional-charts">
+          <div className="pie-chart">
+            <h3>Market Share of Each Chain</h3>
+            <Pie
+              data={pieData}
+              options={{
+                responsive: true,
+                plugins: {
+                  legend: {
+                    position: "bottom",
+                    labels: {
+                      color: "#FFFFFF",
+                    },
+                  },
+                  tooltip: {
+                    callbacks: {
+                      label: function (context) {
+                        const percentage = (
+                          (context.raw /
+                            Object.values(totalTransactionsByChain).reduce(
+                              (a, b) => a + b,
+                              0
+                            )) *
+                          100
+                        ).toFixed(2);
+                        const formattedValue = abbreviateNumber(context.raw);
+                        return `${context.label}: ${formattedValue} (${percentage}%)`;
+                      },
+                    },
+                  },
+                },
+              }}
+            />
+          </div>
+          <div className="bar-chart">
+            <h3>Transaction Count by RaaS Providers</h3>
+            <Bar
+              data={barData}
+              options={{
+                responsive: true,
+                plugins: {
+                  legend: {
+                    display: false,
+                  },
+                  tooltip: {
+                    callbacks: {
+                      label: function (context) {
+                        return abbreviateNumber(context.raw);
+                      },
+                    },
+                  },
+                },
+                scales: {
+                  x: {
+                    ticks: {
+                      color: "#FFFFFF",
+                    },
+                  },
+                  y: {
+                    beginAtZero: true,
+                    ticks: {
+                      color: "#FFFFFF",
                       callback: function (value) {
                         return abbreviateNumber(value);
                       },
