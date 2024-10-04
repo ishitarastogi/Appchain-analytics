@@ -1,5 +1,3 @@
-// DailyTransactionsPage.js
-
 import React, { useState, useEffect } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -60,123 +58,150 @@ const DailyTransactionsPage = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch Gelato-specific data
-        const gelatoData = await fetchGelatoSheetData();
-        setGelatoChains(gelatoData);
-
-        // Fetch data for all chains
-        const sheetData = await fetchGoogleSheetData();
-        setAllChains(sheetData);
-
-        // Fetch transactions data for all chains
-        const transactionsData = await fetchAllTransactions(sheetData);
-        setTransactionsByChain(transactionsData.transactionsByChain);
-        setTransactionsByChainDate(transactionsData.transactionsByChainDate);
-
-        // Function to get filtered dates based on timeRange
-        const getFilteredDates = () => {
-          const today = moment();
-          let startDate;
-          switch (timeRange) {
-            case "Daily":
-              startDate = today.clone().startOf("day");
-              break;
-            case "Monthly":
-              startDate = today.clone().subtract(1, "months").startOf("day");
-              break;
-            case "FourMonths":
-              startDate = today.clone().subtract(4, "months").startOf("day");
-              break;
-            case "SixMonths":
-              startDate = today.clone().subtract(6, "months").startOf("day");
-              break;
-            case "All":
-              startDate = moment("2000-01-01");
-              break;
-            default:
-              startDate = today.clone().subtract(1, "months").startOf("day");
-          }
-          const dates = [];
-          let currentDate = startDate.clone();
-          while (currentDate.isSameOrBefore(today, "day")) {
-            dates.push(currentDate.format("YYYY-MM-DD"));
-            currentDate.add(1, "day");
-          }
-          return dates;
-        };
-
-        const dates = getFilteredDates();
-        setFilteredDates(dates);
-
-        // Calculate transaction counts for each chain based on timeRange
-        const chainTotals = sheetData.map((chain) => {
-          const transactionCounts = dates.map(
-            (date) => transactionsByChainDate[chain.name]?.[date] || 0
-          );
-          const total = transactionCounts.reduce((acc, val) => acc + val, 0);
-          return { name: chain.name, total };
-        });
-
-        // Determine Top 7 Chains based on transaction counts
-        chainTotals.sort((a, b) => b.total - a.total);
-        const topSevenChains = chainTotals
-          .slice(0, 7)
-          .map((chain) => chain.name);
-        setTopChains(topSevenChains);
-
-        // Prepare data for pie and bar charts
-        const totalTransactionsByChainData = chainTotals.reduce(
-          (acc, { name, total }) => ({ ...acc, [name]: total }),
-          {}
+        // Check local storage for existing data
+        const storedData = localStorage.getItem("transactionData");
+        const storedTimestamp = localStorage.getItem(
+          "transactionDataTimestamp"
         );
-        setTotalTransactionsByChain(totalTransactionsByChainData);
 
-        // Calculate transactions by RaaS
-        const transactionsByRaasData = sheetData.reduce((acc, chain) => {
-          const raasProvider = chain.raas;
-          if (!acc[raasProvider]) {
-            acc[raasProvider] = 0;
-          }
-          acc[raasProvider] += totalTransactionsByChainData[chain.name] || 0;
-          return acc;
-        }, {});
-        setTransactionsByRaas(transactionsByRaasData);
+        if (storedData && storedTimestamp) {
+          const timestamp = JSON.parse(storedTimestamp);
+          const sixHoursAgo = Date.now() - 6 * 60 * 60 * 1000;
 
-        // Prepare line chart data for the last 6 months
-        const getLastSixMonthsWeeks = () => {
-          const startDate = moment().subtract(6, "months").startOf("isoWeek");
-          const endDate = moment().startOf("isoWeek");
-          const weeks = [];
-          let currentWeek = startDate.clone();
-          while (currentWeek.isSameOrBefore(endDate, "week")) {
-            weeks.push(currentWeek.format("YYYY-[W]WW"));
-            currentWeek.add(1, "weeks");
+          // If data is less than 6 hours old, use it
+          if (timestamp > sixHoursAgo) {
+            const parsedData = JSON.parse(storedData);
+            populateStateWithData(parsedData);
+            return;
           }
-          return weeks;
+        }
+
+        // Fetch new data if no valid stored data is available
+        const gelatoData = await fetchGelatoSheetData();
+        const sheetData = await fetchGoogleSheetData();
+        const transactionsData = await fetchAllTransactions(sheetData);
+
+        const newData = {
+          gelatoData,
+          sheetData,
+          transactionsData,
         };
 
-        const labels = getLastSixMonthsWeeks();
-        const datasets = topSevenChains.map((chainName) => ({
-          label: chainName,
-          data: labels.map(
-            (week) => transactionsByChain[chainName]?.[week] || 0
-          ),
-          fill: false,
-          borderColor: getColorForChain(chainName),
-          backgroundColor: getColorForChain(chainName),
-          tension: 0.1,
-        }));
-        setChartData({
-          labels,
-          datasets,
-        });
+        localStorage.setItem("transactionData", JSON.stringify(newData));
+        localStorage.setItem(
+          "transactionDataTimestamp",
+          JSON.stringify(Date.now())
+        );
+
+        populateStateWithData(newData);
       } catch (error) {
         console.error("Error during data fetching:", error);
         setError("Failed to load transaction data. Please try again later.");
       }
     };
+
     fetchData();
   }, [timeRange]);
+
+  const populateStateWithData = (data) => {
+    const { gelatoData, sheetData, transactionsData } = data;
+
+    setGelatoChains(gelatoData);
+    setAllChains(sheetData);
+    setTransactionsByChain(transactionsData.transactionsByChain);
+    setTransactionsByChainDate(transactionsData.transactionsByChainDate);
+
+    const dates = getFilteredDates();
+    setFilteredDates(dates);
+
+    // Aggregate data based on the selected time range
+    const chainTotals = sheetData.map((chain) => {
+      const transactionCounts = dates.map(
+        (date) => transactionsByChainDate[chain.name]?.[date] || 0
+      );
+      const total = transactionCounts.reduce((acc, val) => acc + val, 0);
+      return { name: chain.name, total };
+    });
+
+    chainTotals.sort((a, b) => b.total - a.total);
+    const topSevenChains = chainTotals.slice(0, 7).map((chain) => chain.name);
+    setTopChains(topSevenChains);
+
+    const totalTransactionsByChainData = chainTotals.reduce(
+      (acc, { name, total }) => ({ ...acc, [name]: total }),
+      {}
+    );
+    setTotalTransactionsByChain(totalTransactionsByChainData);
+
+    const transactionsByRaasData = sheetData.reduce((acc, chain) => {
+      const raasProvider = chain.raas;
+      if (!acc[raasProvider]) {
+        acc[raasProvider] = 0;
+      }
+      acc[raasProvider] += totalTransactionsByChainData[chain.name] || 0;
+      return acc;
+    }, {});
+    setTransactionsByRaas(transactionsByRaasData);
+
+    const labels = getLastSixMonths();
+    const datasets = topSevenChains.map((chainName) => ({
+      label: chainName,
+      data: labels.map((month) => {
+        // Adjust data to match months on x-axis
+        return transactionsByChainDate[chainName]?.[month] || 0;
+      }),
+      fill: false,
+      borderColor: getColorForChain(chainName),
+      backgroundColor: getColorForChain(chainName),
+      tension: 0.1,
+    }));
+    setChartData({
+      labels,
+      datasets,
+    });
+  };
+
+  const getFilteredDates = () => {
+    const today = moment().format("YYYY-MM-DD");
+    let startDate;
+    switch (timeRange) {
+      case "Daily":
+        startDate = today;
+        break;
+      case "Monthly":
+        startDate = moment().subtract(1, "months").format("YYYY-MM-DD");
+        break;
+      case "FourMonths":
+        startDate = moment().subtract(4, "months").format("YYYY-MM-DD");
+        break;
+      case "SixMonths":
+        startDate = moment().subtract(6, "months").format("YYYY-MM-DD");
+        break;
+      case "All":
+        startDate = moment("2000-01-01").format("YYYY-MM-DD");
+        break;
+      default:
+        startDate = moment().subtract(1, "months").format("YYYY-MM-DD");
+    }
+
+    const dates = [];
+    let currentDate = moment(startDate);
+    while (currentDate.isSameOrBefore(today, "day")) {
+      dates.push(currentDate.format("YYYY-MM-DD"));
+      currentDate.add(1, "day");
+    }
+    return dates;
+  };
+
+  const getLastSixMonths = () => {
+    const months = [];
+    let currentMonth = moment().startOf("month");
+    for (let i = 0; i < 6; i++) {
+      months.push(currentMonth.format("MMMM"));
+      currentMonth.subtract(1, "month");
+    }
+    return months.reverse();
+  };
 
   // Function to handle the toggle between ETH and USD
   const handleToggleCurrency = (selectedCurrency) => {
@@ -415,7 +440,7 @@ const DailyTransactionsPage = () => {
                   x: {
                     title: {
                       display: true,
-                      text: "Time (Weeks)",
+                      text: "Months",
                       color: "#FFFFFF",
                     },
                     ticks: {
@@ -462,15 +487,16 @@ const DailyTransactionsPage = () => {
                   tooltip: {
                     callbacks: {
                       label: function (context) {
+                        const total = context.dataset.data.reduce(
+                          (a, b) => a + b,
+                          0
+                        );
+                        const currentValue = context.raw;
                         const percentage = (
-                          (context.raw /
-                            Object.values(totalTransactionsByChain).reduce(
-                              (a, b) => a + b,
-                              0
-                            )) *
+                          (currentValue / total) *
                           100
                         ).toFixed(2);
-                        const formattedValue = abbreviateNumber(context.raw);
+                        const formattedValue = abbreviateNumber(currentValue);
                         return `${context.label}: ${formattedValue} (${percentage}%)`;
                       },
                     },
