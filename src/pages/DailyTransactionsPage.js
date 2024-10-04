@@ -494,11 +494,30 @@ const DailyTransactionsPage = () => {
               data={pieData}
               options={{
                 responsive: true,
+                maintainAspectRatio: false,
                 plugins: {
                   legend: {
                     position: "bottom",
                     labels: {
                       color: "#FFFFFF",
+                      padding: 20, // Increased padding between legend labels for better visibility
+                    },
+                  },
+                  datalabels: {
+                    color: "#ffffff", // Label color for each slice
+                    formatter: (value, context) => {
+                      const total = context.dataset.data.reduce(
+                        (a, b) => a + b,
+                        0
+                      );
+                      const percentage = ((value / total) * 100).toFixed(1);
+                      return `${percentage}%`; // Display percentage on the pie slice
+                    },
+                    anchor: "end", // Position labels at the end of each slice
+                    align: "start", // Align labels slightly towards the inside of each slice
+                    font: {
+                      weight: "bold",
+                      size: 12, // Adjusted label size for better readability
                     },
                   },
                   tooltip: {
@@ -522,6 +541,7 @@ const DailyTransactionsPage = () => {
               }}
             />
           </div>
+          ;
           <div className="bar-chart">
             <h3>Transaction Count by RaaS Providers</h3>
             <Bar

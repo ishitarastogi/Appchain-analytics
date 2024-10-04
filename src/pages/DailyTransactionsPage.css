@@ -4,6 +4,7 @@
   color: #ffffff; /* White text color for better contrast */
   height: 100vh; /* Full screen height */
   overflow: hidden;
+  padding: 20px; /* Add some padding to the whole page */
 }
 
 /* Sidebar */
@@ -65,13 +66,13 @@
 
 /* Daily Transactions Header */
 .transactions-header {
-  margin-top: 5px;
+  margin-top: 20px; /* Increased spacing to make it more visually appealing */
 }
 
 .heading-container {
   display: flex;
   align-items: center;
-  margin-bottom: 0;
+  margin-bottom: 5px;
   margin-left: 35px;
 }
 
@@ -86,7 +87,7 @@
 
 .transactions-header .description {
   margin-left: 35px;
-  margin-top: -8px;
+  margin-top: -5px;
   font-size: 1rem;
   color: #cccccc;
 }
@@ -94,7 +95,7 @@
 /* Time Range Selector */
 .time-range-selector {
   display: flex;
-  justify-content: space-between;
+  justify-content: space-between; /* Separate the groups */
   margin: 20px 35px;
 }
 
@@ -104,7 +105,8 @@
   gap: 10px;
 }
 
-.time-range-selector button {
+.time-range-left button,
+.time-range-right button {
   background: transparent;
   color: #ffffff;
   border: 1px solid #ffffff;
@@ -113,12 +115,14 @@
   transition: background-color 0.3s, color 0.3s;
 }
 
-.time-range-selector button.active {
+.time-range-left button.active,
+.time-range-right button.active {
   background-color: #ff3b57;
   border: none;
 }
 
-.time-range-selector button:hover {
+.time-range-left button:hover,
+.time-range-right button:hover {
   background-color: #333;
 }
 
@@ -189,24 +193,40 @@
 .additional-charts {
   display: flex;
   justify-content: space-between;
-  gap: 20px;
+  gap: 30px; /* Increased gap between charts for more breathing space */
   margin: 20px 35px;
+  padding-bottom: 50px; /* Added bottom padding to avoid touching the screen edge */
 }
 
+/* Pie Chart and Bar Chart */
 .pie-chart,
 .bar-chart {
   flex-basis: 45%;
-  max-height: 300px; /* Adjust size to make charts smaller */
+  max-height: 400px; /* Increased max height for better visualization */
   background-color: #1c1c1c; /* Consistent background color */
-  padding: 15px;
+  padding: 25px; /* Increased padding to avoid clutter */
   border-radius: 10px;
   border: 1px solid #333; /* Border for chart containers */
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center; /* Center chart content vertically */
 }
 
 /* Chart Titles */
 .pie-chart h3,
 .bar-chart h3 {
-  color: #ff3b57; /* Heading color for charts */
+  color: #ffffff; /* Set heading color to white */
   text-align: center;
-  margin-bottom: 15px;
+  margin-bottom: 20px; /* Added more space between heading and chart */
+}
+/* Pie Chart Legend */
+/* Pie Chart Legend */
+.chart-legend {
+  text-align: center;
+  margin-top: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15px; /* Increased gap between labels */
+  justify-content: center;
 }
