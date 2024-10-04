@@ -143,18 +143,33 @@ const DailyTransactionsPage = () => {
     }, {});
     setTransactionsByRaas(transactionsByRaasData);
 
-    const labels = getLastSixMonths();
+    // Generate labels and keys for the last six months
+    const { labels, keys } = getLastSixMonths();
+
+    // Aggregate transactions per chain per month
+    const transactionsByChainMonth = {};
+    topSevenChains.forEach((chainName) => {
+      transactionsByChainMonth[chainName] = keys.map((monthKey) => {
+        return Object.keys(transactionsByChainDate[chainName] || {})
+          .filter((date) => moment(date).format("YYYY-MM") === monthKey)
+          .reduce(
+            (sum, date) =>
+              sum + (transactionsByChainDate[chainName][date] || 0),
+            0
+          );
+      });
+    });
+
+    // Prepare datasets for the line chart
     const datasets = topSevenChains.map((chainName) => ({
       label: chainName,
-      data: labels.map((month) => {
-        // Adjust data to match months on x-axis
-        return transactionsByChainDate[chainName]?.[month] || 0;
-      }),
+      data: transactionsByChainMonth[chainName],
       fill: false,
       borderColor: getColorForChain(chainName),
       backgroundColor: getColorForChain(chainName),
       tension: 0.1,
     }));
+
     setChartData({
       labels,
       datasets,
@@ -195,12 +210,14 @@ const DailyTransactionsPage = () => {
 
   const getLastSixMonths = () => {
     const months = [];
-    let currentMonth = moment().startOf("month");
+    const keys = [];
+    let currentMonth = moment().subtract(5, "months").startOf("month");
     for (let i = 0; i < 6; i++) {
       months.push(currentMonth.format("MMMM"));
-      currentMonth.subtract(1, "month");
+      keys.push(currentMonth.format("YYYY-MM"));
+      currentMonth.add(1, "month");
     }
-    return months.reverse();
+    return { labels: months, keys };
   };
 
   // Function to handle the toggle between ETH and USD
