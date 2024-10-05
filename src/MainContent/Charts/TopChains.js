@@ -1,7 +1,10 @@
+// src/components/TopChains/TopChains.js
+
 import React, { useEffect, useState } from "react";
 import moment from "moment";
 import "./TopChains.css";
 import { fetchGoogleSheetData } from "../../services/googleSheetService";
+import { getData } from "../../services/indexedDBService"; // Import getData
 
 // Importing logos
 import GelatoLogo from "../../assets/logos/raas/Gelato.png";
@@ -51,18 +54,23 @@ const frameworkLogos = {
 const TopChains = () => {
   const [topChains, setTopChains] = useState([]);
   const [chainDetails, setChainDetails] = useState([]);
+  const [loading, setLoading] = useState(true); // Loading state
+  const [error, setError] = useState(null); // Error state
 
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // Fetch chain details from Google Sheets
         const sheetData = await fetchGoogleSheetData();
         setChainDetails(sheetData);
 
-        const cachedData = JSON.parse(
-          localStorage.getItem("transactionDataCache")
-        );
-        if (cachedData) {
-          const { transactionsByChain, totalTransactionsCombined } = cachedData;
+        // Retrieve cached transaction data from IndexedDB
+        const cachedRecord = await getData("transactionMetricsData"); // Use the same key as TransactionMetrics
+
+        if (cachedRecord && cachedRecord.data) {
+          const { transactionsByChain, totalTransactionsCombined } =
+            cachedRecord.data;
+          console.log("Cached Transactions By Chain:", transactionsByChain); // Debugging
           calculateTopChains(
             transactionsByChain,
             totalTransactionsCombined,
@@ -70,9 +78,13 @@ const TopChains = () => {
           );
         } else {
           console.error("No cached transaction data available.");
+          setError("No cached transaction data available.");
         }
-      } catch (error) {
-        console.error("Error fetching Google Sheets data:", error);
+      } catch (err) {
+        console.error("Error fetching data:", err);
+        setError("Failed to load top chains data.");
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -94,7 +106,10 @@ const TopChains = () => {
       }
     );
 
+    // Sort chains by total transactions in descending order
     chainTotals.sort((a, b) => b.total - a.total);
+
+    // Select top 6 chains
     const topSix = chainTotals.slice(0, 6);
 
     let calculatedTotalTxCombined = totalTxCombined;
@@ -108,17 +123,41 @@ const TopChains = () => {
     const lastWeekKey = getLastWeekKey(transactionsByChain);
     const previousWeekKey = getPreviousWeekKey(lastWeekKey);
 
+    // Debugging logs
+    console.log("Last Week Key:", lastWeekKey);
+    console.log("Previous Week Key:", previousWeekKey);
+
+    if (!previousWeekKey) {
+      console.error("Cannot determine previous week key.");
+      setTopChains([]); // Or handle accordingly
+      return;
+    }
+
     const updatedTopChains = topSix.map((chain) => {
       const currentWeekTx =
         transactionsByChain[chain.chainName]?.[lastWeekKey] || 0;
       const previousWeekTx =
         transactionsByChain[chain.chainName]?.[previousWeekKey] || 0;
+
+      // Debugging logs
+      console.log(`Chain: ${chain.chainName}`);
+      console.log(
+        `Current Week (${lastWeekKey}) Transactions: ${currentWeekTx}`
+      );
+      console.log(
+        `Previous Week (${previousWeekKey}) Transactions: ${previousWeekTx}`
+      );
+
       let percentageIncrease = "N/A";
       if (previousWeekTx > 0) {
         percentageIncrease =
           (((currentWeekTx - previousWeekTx) / previousWeekTx) * 100).toFixed(
             2
           ) + "%";
+      } else if (previousWeekTx === 0 && currentWeekTx > 0) {
+        percentageIncrease = "No Previous Data"; // More informative than "∞%"
+      } else {
+        percentageIncrease = "No Data";
       }
 
       let marketShare = "0%";
@@ -152,15 +191,46 @@ const TopChains = () => {
 
   const getLastWeekKey = (transactionsByChain) => {
     const firstChain = Object.keys(transactionsByChain)[0];
-    const allWeeks = Object.keys(transactionsByChain[firstChain]).sort();
-    return allWeeks[allWeeks.length - 1];
+    const allWeeks = Object.keys(transactionsByChain[firstChain]).sort(
+      (a, b) => {
+        return (
+          moment(a, "GGGG-[W]WW").toDate() - moment(b, "GGGG-[W]WW").toDate()
+        );
+      }
+    );
+    const lastWeek = allWeeks[allWeeks.length - 1];
+    return lastWeek;
   };
 
   const getPreviousWeekKey = (lastWeekKey) => {
-    const lastWeekMoment = moment(lastWeekKey, "YYYY-WW");
+    // Update the format to match "GGGG-[W]WW"
+    const lastWeekMoment = moment(lastWeekKey, "GGGG-[W]WW");
+    if (!lastWeekMoment.isValid()) {
+      console.error("Invalid lastWeekKey format:", lastWeekKey);
+      return null;
+    }
     const previousWeekMoment = lastWeekMoment.clone().subtract(1, "week");
-    return previousWeekMoment.format("YYYY-WW");
+    const previousWeekKey = previousWeekMoment.format("GGGG-[W]WW");
+    return previousWeekKey;
   };
+
+  if (loading) {
+    return (
+      <div className="top-chains-container">
+        <h2 className="top-chains-heading">Top 6 Blockchain Chains</h2>
+        <p>Loading data...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="top-chains-container">
+        <h2 className="top-chains-heading">Top 6 Blockchain Chains</h2>
+        <p className="error-text">{error}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="top-chains-container">
@@ -200,7 +270,7 @@ const TopChains = () => {
           ))}
         </div>
       ) : (
-        <p>Loading data...</p>
+        <p>No top chains data available.</p>
       )}
     </div>
   );

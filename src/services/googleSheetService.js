@@ -79,8 +79,22 @@ export const fetchAllTransactions = async (sheetData) => {
 
   const processTransactionData = (transactions, chainName) => {
     transactions.forEach(({ date, value }) => {
-      const week = moment(date).startOf("isoWeek").format("YYYY-[W]WW");
+      const week = moment(date).startOf("isoWeek").format("GGGG-[W]WW"); // Correct format
       const parsedValue = parseInt(value, 10);
+
+      // Validate week key format
+      const weekKeyPattern = /^\d{4}-W\d{2}$/;
+      if (!weekKeyPattern.test(week)) {
+        console.warn(
+          `Invalid week key format: ${week} for chain: ${chainName}`
+        );
+        return; // Skip malformed week keys
+      }
+
+      // Log the week key for debugging
+      console.log(
+        `Processing Chain: ${chainName}, Date: ${date}, Week: ${week}, Value: ${parsedValue}`
+      );
 
       // Aggregate by week
       if (!transactionDataByWeek[week]) {

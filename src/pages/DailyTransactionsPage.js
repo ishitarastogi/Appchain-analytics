@@ -365,6 +365,8 @@ const DailyTransactionsPage = () => {
             >
               Monthly
             </button>
+          </div>
+          <div className="time-range-right">
             <button
               className={timeRange === "FourMonths" ? "active" : ""}
               onClick={() => handleTimeRangeChange("FourMonths")}
@@ -541,7 +543,7 @@ const DailyTransactionsPage = () => {
               }}
             />
           </div>
-          ;
+
           <div className="bar-chart">
             <h3>Transaction Count by RaaS Providers</h3>
             <Bar

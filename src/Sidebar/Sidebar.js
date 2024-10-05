@@ -7,6 +7,7 @@ import {
   faLink,
   faWallet,
   faCube,
+  faUserCheck, // Import icon for Active Accounts
 } from "@fortawesome/free-solid-svg-icons";
 import "./Sidebar.css";
 
@@ -67,6 +68,7 @@ const Sidebar = () => {
         <li className="sidebar-category">
           <FontAwesomeIcon icon={faCube} /> Ecosystem
         </li>
+        {/* Add more categories or links as needed */}
       </ul>
     </nav>
   );
