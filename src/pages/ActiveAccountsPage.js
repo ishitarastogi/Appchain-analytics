@@ -1,87 +1,83 @@
-// SimpleTPSComponent.js
+import React, { useEffect, useState } from "react";
+import {
+  fetchGoogleSheetData,
+  fetchAllActiveAccounts,
+} from "../services/googleSheetService";
 
-import React, { useState } from "react";
-import { fetchGoogleSheetData, fetchTPSData } from "../services/sheet";
+const ActiveAccountsDisplay = () => {
+  const [activeAccounts, setActiveAccounts] = useState({});
+  const [loading, setLoading] = useState(true);
 
-const SimpleTPSComponent = () => {
-  const [tpsData, setTpsData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const handleFetchTPS = async () => {
-    setLoading(true);
-    setError(null);
-    setTpsData(null);
-
-    try {
-      // Step 1: Fetch Google Sheets Data
-      const sheetData = await fetchGoogleSheetData();
-
-      // Step 2: Select a Project ID (e.g., the first project with an ID)
-      const project = sheetData.find(
-        (item) => item.id && item.id.trim() !== ""
-      );
-      if (!project) {
-        throw new Error("No valid project ID found in Google Sheets data.");
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const sheetData = await fetchGoogleSheetData();
+        const accountsData = await fetchAllActiveAccounts(sheetData);
+        setActiveAccounts(accountsData);
+      } catch (error) {
+        console.error("Error fetching active accounts:", error);
+      } finally {
+        setLoading(false);
       }
+    };
 
-      // Step 3: Fetch TPS Data for the Selected Project
-      const tpsResponse = await fetchTPSData([project.id], "max"); // "max" can be replaced with other ranges like "daily", "6months", etc.
+    fetchData();
+  }, []);
 
-      // Step 4: Update State with the Retrieved TPS Data
-      setTpsData(tpsResponse);
-    } catch (err) {
-      console.error("Error fetching TPS data:", err);
-      setError(err.message || "An unexpected error occurred.");
-    } finally {
-      setLoading(false);
-    }
-  };
+  if (loading) {
+    return <div>Loading...</div>;
+  }
 
   return (
-    <div style={styles.container}>
-      <h2>Simple TPS Fetcher</h2>
-      <button onClick={handleFetchTPS} style={styles.button} disabled={loading}>
-        {loading ? "Fetching TPS..." : "Fetch TPS Data"}
-      </button>
-
-      {error && <p style={styles.error}>Error: {error}</p>}
-
-      {tpsData && (
-        <div style={styles.dataContainer}>
-          <h3>TPS Data:</h3>
-          <pre style={styles.pre}>{JSON.stringify(tpsData, null, 2)}</pre>
-        </div>
+    <div>
+      <h1>Active Accounts Data</h1>
+      {Object.keys(activeAccounts).length === 0 ? (
+        <div>No active accounts data available for Gelato RaaS providers.</div>
+      ) : (
+        Object.entries(activeAccounts).map(([chainName, data]) => (
+          <div key={chainName}>
+            <h2>{chainName}</h2>
+            <div>
+              <h3>Daily Active Accounts:</h3>
+              <pre>
+                {data.daily.activeAccounts &&
+                Array.isArray(data.daily.activeAccounts)
+                  ? JSON.stringify(data.daily.activeAccounts, null, 2)
+                  : "No data available"}
+              </pre>
+            </div>
+            <div>
+              <h3>All Active Accounts:</h3>
+              <pre>
+                {data.all.activeAccounts &&
+                Array.isArray(data.all.activeAccounts)
+                  ? JSON.stringify(data.all.activeAccounts, null, 2)
+                  : "No data available"}
+              </pre>
+            </div>
+            <div>
+              <h3>Active Accounts Last 4 Months:</h3>
+              <pre>
+                {data.fourMonths.activeAccounts &&
+                Array.isArray(data.fourMonths.activeAccounts)
+                  ? JSON.stringify(data.fourMonths.activeAccounts, null, 2)
+                  : "No data available"}
+              </pre>
+            </div>
+            <div>
+              <h3>Active Accounts Last 6 Months:</h3>
+              <pre>
+                {data.sixMonths.activeAccounts &&
+                Array.isArray(data.sixMonths.activeAccounts)
+                  ? JSON.stringify(data.sixMonths.activeAccounts, null, 2)
+                  : "No data available"}
+              </pre>
+            </div>
+          </div>
+        ))
       )}
     </div>
   );
 };
 
-// Simple inline styles for basic styling
-const styles = {
-  container: {
-    padding: "20px",
-    fontFamily: "Arial, sans-serif",
-  },
-  button: {
-    padding: "10px 20px",
-    fontSize: "16px",
-    cursor: "pointer",
-  },
-  error: {
-    color: "red",
-    marginTop: "10px",
-  },
-  dataContainer: {
-    marginTop: "20px",
-    backgroundColor: "#f4f4f4",
-    padding: "10px",
-    borderRadius: "5px",
-  },
-  pre: {
-    whiteSpace: "pre-wrap",
-    wordWrap: "break-word",
-  },
-};
-
-export default SimpleTPSComponent;
+export default ActiveAccountsDisplay;

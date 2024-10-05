@@ -70,6 +70,109 @@ export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
   }
 };
 
+// Fetch Active Accounts Data for a single chain
+
+export const fetchActiveAccountsData = async (
+  blockScoutUrl,
+  launchDate,
+  period
+) => {
+  const normalizedUrl = blockScoutUrl.replace(/\/+$/, "");
+  const formattedLaunchDate = moment(new Date(launchDate)).format("YYYY-MM-DD");
+  const currentDate = moment().format("YYYY-MM-DD");
+
+  let fromDate;
+  switch (period) {
+    case "daily":
+      fromDate = currentDate;
+      break;
+    case "4months":
+      fromDate = moment().subtract(4, "months").format("YYYY-MM-DD");
+      break;
+    case "6months":
+      fromDate = moment().subtract(6, "months").format("YYYY-MM-DD");
+      break;
+    case "all":
+      fromDate = formattedLaunchDate;
+      break;
+    default:
+      throw new Error("Invalid period specified");
+  }
+
+  const activeAccountsApiUrl = encodeURIComponent(
+    `${normalizedUrl}/api/v1/lines/activeAccounts?from=${fromDate}&to=${currentDate}&resolution=DAY`
+  );
+
+  const isDevelopment =
+    !process.env.NODE_ENV || process.env.NODE_ENV === "development";
+  const proxyBaseUrl = isDevelopment
+    ? "http://localhost:3000/api/proxy?url="
+    : "/api/proxy?url=";
+
+  try {
+    const response = await axios.get(`${proxyBaseUrl}${activeAccountsApiUrl}`);
+
+    console.log("Active accounts response:", response.data); // Log the entire response
+
+    // Check if the chart is available
+    if (!response.data.chart || !Array.isArray(response.data.chart)) {
+      console.warn(`No active accounts data available for ${normalizedUrl}`);
+      return { activeAccounts: [] }; // Return an empty array instead of undefined
+    }
+
+    const activeAccounts = response.data.chart.map((item) => ({
+      date: item.date,
+      value: parseInt(item.value, 10),
+    }));
+
+    return { activeAccounts };
+  } catch (error) {
+    console.error(
+      `Error fetching active accounts data for ${normalizedUrl}:`,
+      error.message
+    );
+    throw error;
+  }
+};
+
+// Updated function to calculate active accounts across all chains
+// Fetch active accounts across all chains
+export const fetchAllActiveAccounts = async (sheetData) => {
+  const activeAccountsData = {};
+
+  for (const chain of sheetData) {
+    const { blockScoutUrl, launchDate, name, raas } = chain;
+
+    // Ensure we only process chains with Gelato as RaaS
+    if (raas !== "Gelato") continue;
+
+    try {
+      activeAccountsData[name] = {
+        daily: await fetchActiveAccountsData(
+          blockScoutUrl,
+          launchDate,
+          "daily"
+        ),
+        all: await fetchActiveAccountsData(blockScoutUrl, launchDate, "all"),
+        fourMonths: await fetchActiveAccountsData(
+          blockScoutUrl,
+          launchDate,
+          "4months"
+        ),
+        sixMonths: await fetchActiveAccountsData(
+          blockScoutUrl,
+          launchDate,
+          "6months"
+        ),
+      };
+    } catch (error) {
+      console.error(`Error fetching active accounts for ${name}:`, error);
+    }
+  }
+
+  return activeAccountsData;
+};
+
 // Updated function to calculate transactions across all chains
 export const fetchAllTransactions = async (sheetData) => {
   let totalTransactionsCombined = 0;
