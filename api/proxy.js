@@ -29,11 +29,18 @@ module.exports = async (req, res) => {
     // Make the request to the external API
     const response = await axios.get(decodedUrl);
     console.log("External API response status:", response.status);
+    console.log("External API response data:", response.data); // Log the response data
 
     // Forward the response data
     res.status(200).json(response.data);
   } catch (error) {
     console.error("Error in proxy:", error.message);
+
+    // Log additional error details
+    if (error.response) {
+      console.error("Error response data:", error.response.data);
+      console.error("Error response status:", error.response.status);
+    }
 
     // Forward the error status and message
     const status = error.response ? error.response.status : 500;

@@ -71,7 +71,6 @@ export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
 };
 
 // Fetch Active Accounts Data for a single chain
-
 export const fetchActiveAccountsData = async (
   blockScoutUrl,
   launchDate,
@@ -247,3 +246,50 @@ export const fetchAllTransactions = async (sheetData) => {
     totalTransactionsCombined,
   };
 };
+
+// Function to fetch latest TPS data
+// Function to fetch latest TPS data
+// export const fetchLatestTpsData = async () => {
+//   const baseUrl = `https://l2beat.com/api/trpc/activity.chart?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22range%22%3A%22max%22%2C%22filter%22%3A%7B%22type%22%3A%22projects%22%2C%22projectIds%22%3A%5B%22arbitrum%22%5D%7D%7D%7D%7D`;
+
+//   // Proxy server logic
+//   const isDevelopment =
+//     !process.env.NODE_ENV || process.env.NODE_ENV === "development";
+//   const proxyBaseUrl = isDevelopment
+//     ? "http://localhost:3000/api/proxy?url="
+//     : "/api/proxy?url=";
+
+//   try {
+//     const response = await axios.get(
+//       `${proxyBaseUrl}${encodeURIComponent(baseUrl)}`
+//     );
+//     console.log("Proxy response:", response.data); // Log the full response from proxy
+
+//     // Check if response contains the expected structure
+//     if (
+//       !response.data ||
+//       !response.data[0] ||
+//       !response.data[0].result ||
+//       !response.data[0].result.data ||
+//       !response.data[0].result.data.json
+//     ) {
+//       throw new Error("Invalid response structure from the proxy");
+//     }
+
+//     const data = response.data[0].result.data.json;
+
+//     // Get the latest TPS data (last entry)
+//     const latestData = data[data.length - 1]; // Get the last entry
+//     const timestamp = latestData[0];
+//     const tps = latestData[1];
+
+//     console.log(`Latest TPS Data: Timestamp: ${timestamp}, TPS: ${tps}`);
+//     return {
+//       timestamp,
+//       tps,
+//     };
+//   } catch (error) {
+//     console.error(`Error fetching TPS data:`, error.message);
+//     throw error;
+//   }
+// };

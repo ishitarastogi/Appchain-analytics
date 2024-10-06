@@ -1,5 +1,6 @@
+// src/components/Sidebar.js
 import React from "react";
-import { Link } from "react-router-dom"; // Assuming you're using React Router for navigation
+import { Link } from "react-router-dom";
 import GelatoLogo from "../assets/logo.png";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -7,7 +8,7 @@ import {
   faLink,
   faWallet,
   faCube,
-  faUserCheck, // Import icon for Active Accounts
+  faUserCheck,
 } from "@fortawesome/free-solid-svg-icons";
 import "./Sidebar.css";
 
@@ -68,7 +69,6 @@ const Sidebar = () => {
         <li className="sidebar-category">
           <FontAwesomeIcon icon={faCube} /> Ecosystem
         </li>
-        {/* Add more categories or links as needed */}
       </ul>
     </nav>
   );
