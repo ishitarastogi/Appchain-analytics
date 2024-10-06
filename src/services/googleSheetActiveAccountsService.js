@@ -17,6 +17,7 @@ export const fetchGelatoActiveAccountsSheetData = async () => {
         blockScoutUrl: row[1],
         raas: row[4],
         launchDate: row[8],
+        vertical: row[9], // Column J: Vertical
       }))
       .filter((chain) => chain.raas.toLowerCase() === "gelato");
   } catch (error) {
