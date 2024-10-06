@@ -1,6 +1,8 @@
-import axios from "axios";
-import moment from "moment";
+// googleTPSService.js
 
+import axios from "axios";
+
+// Fetch Google Sheets Data
 export const fetchGoogleSheetData = async () => {
   const GOOGLE_SHEET_URL = `https://sheets.googleapis.com/v4/spreadsheets/1z-wz6qNOb2Zs7d3xnPjhl004YhIuov-ecd60JzffaNM/values/Sheet1!A2:Z1000?key=${process.env.REACT_APP_GOOGLE_SHEETS_API_KEY}`;
 
@@ -15,6 +17,7 @@ export const fetchGoogleSheetData = async () => {
       website: row[3],
       raas: row[4],
       launchDate: row[8],
+      vertical: row[9], // Include vertical for the table
     }));
   } catch (error) {
     console.error("Error fetching Google Sheets data:", error);
@@ -22,10 +25,8 @@ export const fetchGoogleSheetData = async () => {
   }
 };
 
+// Fetch TPS Data for a single project
 export const fetchTpsData = async (projectId, launchDate) => {
-  const currentDate = moment().format("YYYY-MM-DD");
-  const formattedLaunchDate = moment(new Date(launchDate)).format("YYYY-MM-DD");
-
   const baseUrl = `https://l2beat.com/api/trpc/activity.chart?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22range%22%3A%22max%22%2C%22filter%22%3A%7B%22type%22%3A%22projects%22%2C%22projectIds%22%3A%5B%22${projectId}%22%5D%7D%7D%7D%7D`;
 
   const isDevelopment =
@@ -39,6 +40,7 @@ export const fetchTpsData = async (projectId, launchDate) => {
       `${proxyBaseUrl}${encodeURIComponent(baseUrl)}`
     );
 
+    // Check if the response is in expected format
     if (
       !response.data ||
       !response.data[0] ||
@@ -52,6 +54,7 @@ export const fetchTpsData = async (projectId, launchDate) => {
 
     const data = response.data[0].result.data.json;
 
+    // Extracting TPS data
     const tpsData = data.map((item) => ({
       timestamp: item[0],
       tps: item[1],
@@ -68,12 +71,11 @@ export const fetchTpsData = async (projectId, launchDate) => {
   }
 };
 
-export const fetchAllTpsDataForGelatoChains = async (sheetData) => {
+// Fetch TPS Data for all chains
+export const fetchAllTpsData = async (sheetData) => {
   const tpsDataResults = {};
 
   for (const chain of sheetData) {
-    if (chain.raas.toLowerCase() !== "gelato") continue;
-
     try {
       const tpsData = await fetchTpsData(chain.id, chain.launchDate);
       tpsDataResults[chain.name] = tpsData;
