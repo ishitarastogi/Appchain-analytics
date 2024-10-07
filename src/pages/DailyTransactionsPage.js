@@ -48,19 +48,18 @@ const DailyTransactionsPage = () => {
   const [allChains, setAllChains] = useState([]);
   const [transactionsByChain, setTransactionsByChain] = useState({});
   const [transactionsByChainDate, setTransactionsByChainDate] = useState({});
-  const [chartData, setChartData] = useState({
-    labels: [],
-    datasets: [],
-  });
+  const [chartData, setChartData] = useState(null); // Initialize as null
   const [topChains, setTopChains] = useState([]);
   const [totalTransactionsByChain, setTotalTransactionsByChain] = useState({});
   const [transactionsByRaas, setTransactionsByRaas] = useState({});
   const [error, setError] = useState(null);
   const [filteredDates, setFilteredDates] = useState([]);
+  const [loading, setLoading] = useState(true); // Loading state
   const SIX_HOURS_IN_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
 
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true); // Start loading
       try {
         // Retrieve data from IndexedDB
         const storedRecord = await getData(DAILY_DATA_ID);
@@ -70,6 +69,7 @@ const DailyTransactionsPage = () => {
         if (storedRecord && storedRecord.timestamp > sixHoursAgo) {
           // Use stored data if it's less than 6 hours old
           populateStateWithData(storedRecord.data);
+          setLoading(false); // End loading
           return;
         }
 
@@ -91,6 +91,8 @@ const DailyTransactionsPage = () => {
       } catch (error) {
         console.error("Error during data fetching:", error);
         setError("Failed to load transaction data. Please try again later.");
+      } finally {
+        setLoading(false); // End loading regardless of success or failure
       }
     };
 
@@ -344,238 +346,260 @@ const DailyTransactionsPage = () => {
         {/* Error Message */}
         {error && <div className="error-message">{error}</div>}
 
+        {/* Loading Indicator */}
+        {loading && <div className="loading">Loading data...</div>}
+
         {/* Time Range Selector */}
-        <div className="time-range-selector">
-          <div className="time-range-left">
-            <button
-              className={timeRange === "Daily" ? "active" : ""}
-              onClick={() => handleTimeRangeChange("Daily")}
-            >
-              Daily
-            </button>
-            <button
-              className={timeRange === "Monthly" ? "active" : ""}
-              onClick={() => handleTimeRangeChange("Monthly")}
-            >
-              Monthly
-            </button>
+        {!loading && (
+          <div className="time-range-selector">
+            <div className="time-range-left">
+              <button
+                className={timeRange === "Daily" ? "active" : ""}
+                onClick={() => handleTimeRangeChange("Daily")}
+              >
+                Daily
+              </button>
+              <button
+                className={timeRange === "Monthly" ? "active" : ""}
+                onClick={() => handleTimeRangeChange("Monthly")}
+              >
+                Monthly
+              </button>
+            </div>
+            <div className="time-range-right">
+              <button
+                className={timeRange === "FourMonths" ? "active" : ""}
+                onClick={() => handleTimeRangeChange("FourMonths")}
+              >
+                4 Months
+              </button>
+              <button
+                className={timeRange === "SixMonths" ? "active" : ""}
+                onClick={() => handleTimeRangeChange("SixMonths")}
+              >
+                6 Months
+              </button>
+              <button
+                className={timeRange === "All" ? "active" : ""}
+                onClick={() => handleTimeRangeChange("All")}
+              >
+                All
+              </button>
+            </div>
           </div>
-          <div className="time-range-right">
-            <button
-              className={timeRange === "FourMonths" ? "active" : ""}
-              onClick={() => handleTimeRangeChange("FourMonths")}
-            >
-              4 Months
-            </button>
-            <button
-              className={timeRange === "SixMonths" ? "active" : ""}
-              onClick={() => handleTimeRangeChange("SixMonths")}
-            >
-              6 Months
-            </button>
-            <button
-              className={timeRange === "All" ? "active" : ""}
-              onClick={() => handleTimeRangeChange("All")}
-            >
-              All
-            </button>
-          </div>
-        </div>
+        )}
 
         {/* Table and Chart Section */}
-        <div className="table-chart-container">
-          {/* Gelato Chain List */}
-          <div className="chain-list">
-            {gelatoChains.map((chain, index) => {
-              const transactionCounts = filteredDates.map(
-                (date) => transactionsByChainDate[chain.name]?.[date] || 0
-              );
-              const transactionCount = transactionCounts.reduce(
-                (acc, val) => acc + val,
-                0
-              );
+        {!loading && (
+          <div className="table-chart-container">
+            {/* Gelato Chain List */}
+            <div className="chain-list">
+              {gelatoChains.map((chain, index) => {
+                const transactionCounts = filteredDates.map(
+                  (date) => transactionsByChainDate[chain.name]?.[date] || 0
+                );
+                const transactionCount = transactionCounts.reduce(
+                  (acc, val) => acc + val,
+                  0
+                );
 
-              return (
-                <div key={index} className="chain-item">
-                  <img
-                    src={`https://s2.googleusercontent.com/s2/favicons?domain=${chain.blockScoutUrl}&sz=32`}
-                    alt={`${chain.name} Logo`}
-                    className="chain-logo"
-                  />
-                  <span className="chain-name">
-                    {chain.name}
+                return (
+                  <div key={index} className="chain-item">
                     <img
-                      src={GelatoLogo}
-                      alt="RaaS Logo"
-                      className="raas-logo"
+                      src={`https://s2.googleusercontent.com/s2/favicons?domain=${chain.blockScoutUrl}&sz=32`}
+                      alt={`${chain.name} Logo`}
+                      className="chain-logo"
                     />
-                  </span>
-                  <span className="transactions">
-                    {abbreviateNumber(transactionCount)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+                    <span className="chain-name">
+                      {chain.name}
+                      <img
+                        src={GelatoLogo}
+                        alt="RaaS Logo"
+                        className="raas-logo"
+                      />
+                    </span>
+                    <span className="transactions">
+                      {abbreviateNumber(transactionCount)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
 
-          {/* Line Chart Section */}
-          <div className="line-chart">
-            <Line
-              data={chartData}
-              options={{
-                responsive: true,
-                plugins: {
-                  legend: {
-                    position: "bottom",
-                    labels: {
-                      color: "#FFFFFF",
-                    },
-                  },
-                  title: {
-                    display: true,
-                    text: `Transactions - Last 6 Months`,
-                    color: "#FFFFFF",
-                  },
-                  tooltip: {
-                    callbacks: {
-                      label: function (context) {
-                        return `${context.dataset.label}: ${abbreviateNumber(
-                          context.parsed.y
-                        )}`;
+            {/* Line Chart Section */}
+            <div className="line-chart">
+              {chartData ? (
+                <Line
+                  data={chartData}
+                  options={{
+                    responsive: true,
+                    plugins: {
+                      legend: {
+                        position: "bottom",
+                        labels: {
+                          color: "#FFFFFF",
+                        },
+                      },
+                      title: {
+                        display: true,
+                        text: `Transactions - Last 6 Months`,
+                        color: "#FFFFFF",
+                      },
+                      tooltip: {
+                        callbacks: {
+                          label: function (context) {
+                            return `${
+                              context.dataset.label
+                            }: ${abbreviateNumber(context.parsed.y)}`;
+                          },
+                        },
+                        backgroundColor: "rgba(0,0,0,0.7)",
+                        titleColor: "#FFFFFF",
+                        bodyColor: "#FFFFFF",
                       },
                     },
-                    backgroundColor: "rgba(0,0,0,0.7)",
-                    titleColor: "#FFFFFF",
-                    bodyColor: "#FFFFFF",
-                  },
-                },
-                scales: {
-                  x: {
-                    title: {
-                      display: true,
-                      text: "Months",
-                      color: "#FFFFFF",
-                    },
-                    ticks: {
-                      color: "#FFFFFF",
-                      maxRotation: 0,
-                      minRotation: 0,
-                    },
-                  },
-                  y: {
-                    title: {
-                      display: true,
-                      text: "Number of Transactions",
-                      color: "#FFFFFF",
-                    },
-                    ticks: {
-                      color: "#FFFFFF",
-                      beginAtZero: true,
-                      callback: function (value) {
-                        return abbreviateNumber(value);
+                    scales: {
+                      x: {
+                        title: {
+                          display: true,
+                          text: "Months",
+                          color: "#FFFFFF",
+                        },
+                        ticks: {
+                          color: "#FFFFFF",
+                          maxRotation: 0,
+                          minRotation: 0,
+                        },
+                      },
+                      y: {
+                        title: {
+                          display: true,
+                          text: "Number of Transactions",
+                          color: "#FFFFFF",
+                        },
+                        ticks: {
+                          color: "#FFFFFF",
+                          beginAtZero: true,
+                          callback: function (value) {
+                            return abbreviateNumber(value);
+                          },
+                        },
                       },
                     },
-                  },
-                },
-              }}
-            />
+                  }}
+                />
+              ) : (
+                <div className="chart-placeholder">No data available</div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Additional Chart Section */}
-        <div className="additional-charts">
-          <div className="pie-chart">
-            <h3>Market Share of Each Chain</h3>
-            <Pie
-              data={pieData}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: "bottom",
-                    labels: {
-                      color: "#FFFFFF",
-                      padding: 20, // Increased padding between legend labels for better visibility
-                    },
-                  },
-                  datalabels: {
-                    color: "#ffffff", // Label color for each slice
-                    formatter: (value, context) => {
-                      const total = context.dataset.data.reduce(
-                        (a, b) => a + b,
-                        0
-                      );
-                      const percentage = ((value / total) * 100).toFixed(1);
-                      return `${percentage}%`; // Display percentage on the pie slice
-                    },
-                    anchor: "end", // Position labels at the end of each slice
-                    align: "start", // Align labels slightly towards the inside of each slice
-                    font: {
-                      weight: "bold",
-                      size: 12, // Adjusted label size for better readability
-                    },
-                  },
-                  tooltip: {
-                    callbacks: {
-                      label: function (context) {
-                        const total = context.dataset.data.reduce(
-                          (a, b) => a + b,
-                          0
-                        );
-                        const currentValue = context.raw;
-                        const percentage = (
-                          (currentValue / total) *
-                          100
-                        ).toFixed(2);
-                        const formattedValue = abbreviateNumber(currentValue);
-                        return `${context.label}: ${formattedValue} (${percentage}%)`;
+        {!loading && (
+          <div className="additional-charts">
+            <div className="pie-chart">
+              <h3>Market Share of Each Chain</h3>
+              {pieData.datasets[0].data.some((value) => value > 0) ? (
+                <Pie
+                  data={pieData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: {
+                        position: "bottom",
+                        labels: {
+                          color: "#FFFFFF",
+                          padding: 20, // Increased padding between legend labels for better visibility
+                        },
+                      },
+                      datalabels: {
+                        color: "#ffffff", // Label color for each slice
+                        formatter: (value, context) => {
+                          const total = context.dataset.data.reduce(
+                            (a, b) => a + b,
+                            0
+                          );
+                          const percentage = ((value / total) * 100).toFixed(1);
+                          return `${percentage}%`; // Display percentage on the pie slice
+                        },
+                        anchor: "end", // Position labels at the end of each slice
+                        align: "start", // Align labels slightly towards the inside of each slice
+                        font: {
+                          weight: "bold",
+                          size: 12, // Adjusted label size for better readability
+                        },
+                      },
+                      tooltip: {
+                        callbacks: {
+                          label: function (context) {
+                            const total = context.dataset.data.reduce(
+                              (a, b) => a + b,
+                              0
+                            );
+                            const currentValue = context.raw;
+                            const percentage = (
+                              (currentValue / total) *
+                              100
+                            ).toFixed(2);
+                            const formattedValue =
+                              abbreviateNumber(currentValue);
+                            return `${context.label}: ${formattedValue} (${percentage}%)`;
+                          },
+                        },
                       },
                     },
-                  },
-                },
-              }}
-            />
-          </div>
+                  }}
+                />
+              ) : (
+                <div className="chart-placeholder">No data available</div>
+              )}
+            </div>
 
-          <div className="bar-chart">
-            <h3>Transaction Count by RaaS Providers</h3>
-            <Bar
-              data={barData}
-              options={{
-                responsive: true,
-                plugins: {
-                  legend: {
-                    display: false,
-                  },
-                  tooltip: {
-                    callbacks: {
-                      label: function (context) {
-                        return abbreviateNumber(context.raw);
+            <div className="bar-chart">
+              <h3>Transaction Count by RaaS Providers</h3>
+              {barData.datasets[0].data.some((value) => value > 0) ? (
+                <Bar
+                  data={barData}
+                  options={{
+                    responsive: true,
+                    plugins: {
+                      legend: {
+                        display: false,
+                      },
+                      tooltip: {
+                        callbacks: {
+                          label: function (context) {
+                            return abbreviateNumber(context.raw);
+                          },
+                        },
                       },
                     },
-                  },
-                },
-                scales: {
-                  x: {
-                    ticks: {
-                      color: "#FFFFFF",
-                    },
-                  },
-                  y: {
-                    beginAtZero: true,
-                    ticks: {
-                      color: "#FFFFFF",
-                      callback: function (value) {
-                        return abbreviateNumber(value);
+                    scales: {
+                      x: {
+                        ticks: {
+                          color: "#FFFFFF",
+                        },
+                      },
+                      y: {
+                        beginAtZero: true,
+                        ticks: {
+                          color: "#FFFFFF",
+                          callback: function (value) {
+                            return abbreviateNumber(value);
+                          },
+                        },
                       },
                     },
-                  },
-                },
-              }}
-            />
+                  }}
+                />
+              ) : (
+                <div className="chart-placeholder">No data available</div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
