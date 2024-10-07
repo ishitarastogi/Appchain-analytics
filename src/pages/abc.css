@@ -6,14 +6,6 @@
   color: #ffffff;
   height: 100vh;
   overflow: hidden;
-  padding: 20px;
-}
-
-.sidebar {
-  width: 240px;
-  position: fixed;
-  left: 0;
-  top: 0;
 }
 
 .main-content {
@@ -102,12 +94,12 @@
   justify-content: space-between;
   gap: 20px;
   margin: 20px 35px;
-  align-items: flex-start;
+  align-items: stretch; /* Adjusted to stretch */
 }
 
 .chain-list {
   flex-basis: 45%;
-  max-height: 600px;
+  max-height: 800px;
   overflow-y: auto;
 }
 
@@ -140,7 +132,11 @@
 
 .line-chart {
   flex-basis: 50%;
-  max-height: 600px; /* Increased height */
+  max-height: 800px; /* Increased height */
+}
+
+.line-chart canvas {
+  height: 100% !important; /* Ensure the canvas uses the full height */
 }
 
 .error-message {

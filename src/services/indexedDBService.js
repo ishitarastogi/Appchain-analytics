@@ -39,10 +39,11 @@ export const getData = async (id) => {
   return record;
 };
 
-// Clear all data (optional)
+// Clear all data from IndexedDB
 export const clearAllData = async () => {
   const db = await initDB();
   const tx = db.transaction(STORE_NAME, "readwrite");
-  await tx.objectStore(STORE_NAME).clear();
+  const store = tx.objectStore(STORE_NAME);
+  await store.clear();
   await tx.done;
 };

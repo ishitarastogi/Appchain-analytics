@@ -26,6 +26,8 @@ import {
 } from "../services/googleSheetService";
 import { abbreviateNumber } from "../utils/numberFormatter";
 import moment from "moment";
+// Import IndexedDB functions
+import { saveData, getData, clearAllData } from "../services/indexedDBService";
 
 // Register required components for Chart.js
 ChartJS.register(
@@ -39,6 +41,10 @@ ChartJS.register(
   ArcElement,
   BarElement
 );
+
+// Unique ID for IndexedDB storage
+const ACTIVE_ACCOUNTS_DATA_ID = "activeAccountsData";
+const SIX_HOURS_IN_MS = 6 * 60 * 60 * 1000; // Cache duration
 
 const ActiveAccountsPage = () => {
   const [currency, setCurrency] = useState("ETH");
@@ -57,35 +63,107 @@ const ActiveAccountsPage = () => {
   const [error, setError] = useState(null);
   const [filteredDates, setFilteredDates] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState(null); // Last updated timestamp
 
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // Fetch data
-        const gelatoData = await fetchGelatoSheetData();
-        const sheetData = await fetchGoogleSheetData();
-        const activeAccountsData = await fetchAllActiveAccounts(sheetData);
-
-        const data = {
-          gelatoData,
-          sheetData,
-          activeAccountsData,
-        };
-
-        populateStateWithData(data);
-      } catch (error) {
-        console.error("Error during data fetching:", error);
-        setError(
-          "Failed to load active accounts data. Please try again later."
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
   }, [timeRange]);
+
+  // Function to fetch data (from IndexedDB or API)
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      // Attempt to retrieve data from IndexedDB
+      const storedRecord = await getData(ACTIVE_ACCOUNTS_DATA_ID);
+      const sixHoursAgo = Date.now() - SIX_HOURS_IN_MS;
+
+      if (
+        storedRecord &&
+        storedRecord.timestamp > sixHoursAgo &&
+        isValidData(storedRecord.data)
+      ) {
+        // Use stored data if it's recent and valid
+        populateStateWithData(storedRecord.data);
+        setLastUpdated(new Date(storedRecord.timestamp));
+        setLoading(false);
+        return;
+      }
+
+      // Fetch new data
+      const gelatoData = await fetchGelatoSheetData();
+      const sheetData = await fetchGoogleSheetData();
+      const activeAccountsData = await fetchAllActiveAccounts(sheetData);
+
+      const data = {
+        gelatoData,
+        sheetData,
+        activeAccountsData,
+      };
+
+      // Save new data to IndexedDB
+      const timestamp = Date.now();
+      await saveData(ACTIVE_ACCOUNTS_DATA_ID, data);
+
+      // Update state
+      populateStateWithData(data);
+      setLastUpdated(new Date(timestamp));
+    } catch (error) {
+      console.error("Error during data fetching:", error);
+      setError("Failed to load active accounts data. Please try again later.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Function to validate data retrieved from IndexedDB
+  const isValidData = (data) => {
+    if (!data) return false;
+    const { gelatoData, sheetData, activeAccountsData } = data;
+    if (
+      !gelatoData ||
+      !sheetData ||
+      !activeAccountsData ||
+      !activeAccountsData.activeAccountsByChainDate
+    ) {
+      return false;
+    }
+    return true;
+  };
+
+  // Handler for refreshing data
+  const handleRefresh = async () => {
+    setLoading(true);
+    try {
+      // Clear IndexedDB data
+      await clearAllData();
+
+      // Fetch new data
+      const gelatoData = await fetchGelatoSheetData();
+      const sheetData = await fetchGoogleSheetData();
+      const activeAccountsData = await fetchAllActiveAccounts(sheetData);
+
+      const data = {
+        gelatoData,
+        sheetData,
+        activeAccountsData,
+      };
+
+      // Save data to IndexedDB with timestamp
+      const timestamp = Date.now();
+      await saveData(ACTIVE_ACCOUNTS_DATA_ID, data);
+
+      // Update state
+      populateStateWithData(data);
+      setLastUpdated(new Date(timestamp));
+    } catch (error) {
+      console.error("Error refreshing data:", error);
+      setError(
+        "Failed to refresh active accounts data. Please try again later."
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const populateStateWithData = (data) => {
     const { gelatoData, sheetData, activeAccountsData } = data;
@@ -328,6 +406,14 @@ const ActiveAccountsPage = () => {
             day
           </p>
         </div>
+
+        {/* Refresh Data Button and Last Updated Timestamp */}
+        {!loading && (
+          <div className="refresh-section">
+            <button onClick={handleRefresh}>Refresh Data</button>
+            {lastUpdated && <p>Last Updated: {lastUpdated.toLocaleString()}</p>}
+          </div>
+        )}
 
         {/* Error Message */}
         {error && <div className="error-message">{error}</div>}

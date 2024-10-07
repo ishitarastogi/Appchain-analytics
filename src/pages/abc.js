@@ -1,4 +1,6 @@
-import React, { useState, useEffect } from "react";
+// TpssPage.js
+
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faTachometerAlt } from "@fortawesome/free-solid-svg-icons";
@@ -37,16 +39,14 @@ ChartJS.register(
 const TpssPage = () => {
   const [gelatoChains, setGelatoChains] = useState([]);
   const [tpsData, setTpsData] = useState({});
-  const [chartData, setChartData] = useState({
-    labels: [],
-    datasets: [],
-  });
+  const [chartData, setChartData] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState("Monthly");
   const [lastUpdated, setLastUpdated] = useState(null);
 
-  const fetchData = async (forceRefresh = false) => {
+  // Memoized fetchData function
+  const fetchData = useCallback(async (forceRefresh = false) => {
     setLoading(true);
     try {
       const storedData = await getData("tpsData");
@@ -62,11 +62,13 @@ const TpssPage = () => {
         setLastUpdated(new Date(storedData.timestamp));
       } else {
         const sheetData = await fetchGoogleSheetData();
+        const tpsDataFetched = await fetchAllTpsData(sheetData);
+
         newData = {
           gelatoChains: sheetData.filter(
             (chain) => chain.raas && chain.raas.toLowerCase() === "gelato"
           ),
-          tpsData: await fetchAllTpsData(sheetData),
+          tpsData: tpsDataFetched,
         };
         await saveData("tpsData", newData);
         setLastUpdated(new Date());
@@ -74,18 +76,23 @@ const TpssPage = () => {
 
       setGelatoChains(newData.gelatoChains);
       setTpsData(newData.tpsData);
-      populateChartData(newData.tpsData);
     } catch (error) {
       console.error("Error during data fetching:", error);
       setError("Failed to load data. Please try again later.");
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, [timeRange]);
+  }, [fetchData]);
+
+  useEffect(() => {
+    if (Object.keys(tpsData).length > 0) {
+      populateChartData(tpsData);
+    }
+  }, [tpsData, timeRange]);
 
   const handleTimeRangeChange = (range) => {
     setTimeRange(range);
@@ -96,94 +103,109 @@ const TpssPage = () => {
     fetchData(true);
   };
 
-  const filterDataByTimeRange = (data, applyToChart = true) => {
-    const now = moment();
-    let startDate;
+  const filterDataByTimeRange = useCallback(
+    (data) => {
+      const now = moment();
+      let startDate;
 
-    switch (timeRange) {
-      case "Daily":
-        startDate = now.clone().startOf("day");
-        break;
-      case "Monthly":
-        startDate = now.clone().subtract(1, "month");
-        break;
-      case "FourMonths":
-        startDate = now.clone().subtract(4, "months");
-        break;
-      case "SixMonths":
-        startDate = now.clone().subtract(6, "months");
-        break;
-      case "All":
-      default:
-        startDate = moment(0);
-    }
-
-    if (timeRange === "Daily" && !applyToChart) {
-      startDate = moment(0);
-    }
-
-    return data.filter((item) =>
-      moment(item.timestamp * 1000).isAfter(startDate)
-    );
-  };
-
-  const populateChartData = (allTpsData) => {
-    const chainAverages = Object.entries(allTpsData).map(
-      ([chainName, tpsArray]) => {
-        const filteredData = filterDataByTimeRange(tpsArray, false);
-        const averageTps =
-          filteredData.reduce((sum, item) => sum + item.tps, 0) /
-            filteredData.length || 0;
-        return { chainName, averageTps };
+      switch (timeRange) {
+        case "Daily":
+          startDate = now.clone().startOf("day");
+          break;
+        case "Monthly":
+          startDate = now.clone().subtract(1, "month");
+          break;
+        case "FourMonths":
+          startDate = now.clone().subtract(4, "months");
+          break;
+        case "SixMonths":
+          startDate = now.clone().subtract(6, "months");
+          break;
+        case "All":
+        default:
+          startDate = moment(0);
       }
-    );
 
-    const topChains = chainAverages
-      .sort((a, b) => b.averageTps - a.averageTps)
-      .slice(0, 10)
-      .map((item) => item.chainName);
+      return data.filter((item) =>
+        moment(item.timestamp * 1000).isAfter(startDate)
+      );
+    },
+    [timeRange]
+  );
 
-    const datasets = [];
-    let labelsSet = new Set();
+  const populateChartData = useCallback(
+    (allTpsData) => {
+      const chainAverages = Object.entries(allTpsData).map(
+        ([chainName, tpsArray]) => {
+          const filteredData = filterDataByTimeRange(tpsArray);
+          const averageTps =
+            filteredData.reduce((sum, item) => sum + item.tps, 0) /
+              filteredData.length || 0;
+          return { chainName, averageTps };
+        }
+      );
 
-    topChains.forEach((chainName) => {
-      const tpsArray = allTpsData[chainName];
-      const filteredData = filterDataByTimeRange(tpsArray, false);
-      const data = filteredData.map((item) => ({
-        x: new Date(item.timestamp * 1000),
-        y: item.tps,
-      }));
+      const topChains = chainAverages
+        .sort((a, b) => b.averageTps - a.averageTps)
+        .slice(0, 10)
+        .map((item) => item.chainName);
 
-      data.forEach((item) => labelsSet.add(item.x));
+      const datasets = [];
+      let labelsSet = new Set();
 
-      datasets.push({
-        label: chainName,
-        data: data,
-        borderColor: getColorForChain(chainName),
-        fill: false,
-        tension: 0.1,
+      topChains.forEach((chainName) => {
+        const tpsArray = allTpsData[chainName];
+        const filteredData = filterDataByTimeRange(tpsArray);
+        const data = filteredData.map((item) => ({
+          x: new Date(item.timestamp * 1000),
+          y: item.tps,
+        }));
+
+        data.forEach((item) => labelsSet.add(item.x.getTime()));
+
+        datasets.push({
+          label: chainName,
+          data: data,
+          borderColor: getColorForChain(chainName),
+          fill: false,
+          tension: 0.1,
+        });
       });
-    });
 
-    const labels = Array.from(labelsSet).sort((a, b) => a - b);
+      const labels = Array.from(labelsSet)
+        .sort((a, b) => a - b)
+        .map((timestamp) => new Date(timestamp));
 
-    setChartData({
-      labels: labels,
-      datasets: datasets,
-    });
-  };
+      setChartData({
+        labels: labels,
+        datasets: datasets,
+      });
+    },
+    [filterDataByTimeRange]
+  );
 
-  const getColorForChain = (chainName) => {
-    const colorMap = {
-      // Add predefined colors if needed
-    };
-    return (
-      colorMap[chainName] ||
-      `#${Math.floor(Math.random() * 16777215).toString(16)}`
-    );
-  };
+  const getColorForChain = useCallback((chainName) => {
+    const colors = [
+      "#FF6384",
+      "#36A2EB",
+      "#FFCE56",
+      "#4BC0C0",
+      "#9966FF",
+      "#FF9F40",
+      "#C9CBCF",
+      "#E7E9ED",
+      "#EC6731",
+      "#B28AFE",
+    ];
+    let hash = 0;
+    for (let i = 0; i < chainName.length; i++) {
+      hash = chainName.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const colorIndex = Math.abs(hash) % colors.length;
+    return colors[colorIndex];
+  }, []);
 
-  const abbreviateNumber = (num) => {
+  const abbreviateNumber = useCallback((num) => {
     if (num === undefined || num === null || isNaN(num)) return "0";
     if (num === 0) return "0";
 
@@ -205,7 +227,31 @@ const TpssPage = () => {
 
     shortNumber = parseFloat(shortNumber.toPrecision(3));
     return sign * shortNumber + suffixes[suffixIndex];
-  };
+  }, []);
+
+  // Memoize chainRows to prevent unnecessary re-computation
+  const chainRows = useMemo(() => {
+    return gelatoChains.map((chain) => {
+      const chainName = chain.name;
+      const chainTpsData = tpsData[chainName] || [];
+      const latestTps =
+        chainTpsData.length > 0
+          ? chainTpsData[chainTpsData.length - 1]?.tps || 0
+          : 0;
+      const maxTps =
+        chainTpsData.length > 0
+          ? Math.max(...chainTpsData.map((data) => data.tps || 0), 0)
+          : 0;
+      return {
+        id: chain.id,
+        chainName: chain.name,
+        blockScoutUrl: chain.blockScoutUrl,
+        vertical: chain.vertical,
+        latestTps,
+        maxTps,
+      };
+    });
+  }, [gelatoChains, tpsData]);
 
   if (loading) {
     return <div className="loading">Loading TPS Data...</div>;
@@ -283,12 +329,15 @@ const TpssPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {gelatoChains.length > 0 ? (
-                  gelatoChains.map((chain) => (
+                {chainRows.length > 0 ? (
+                  chainRows.map((row) => (
                     <TableRow
-                      key={chain.id}
-                      chain={chain}
-                      tpsData={tpsData}
+                      key={row.id}
+                      blockScoutUrl={row.blockScoutUrl}
+                      chainName={row.chainName}
+                      latestTps={row.latestTps}
+                      maxTps={row.maxTps}
+                      vertical={row.vertical}
                       abbreviateNumber={abbreviateNumber}
                     />
                   ))
@@ -304,72 +353,76 @@ const TpssPage = () => {
           </div>
 
           <div className="line-chart">
-            <Line
-              data={chartData}
-              options={{
-                responsive: true,
-                plugins: {
-                  legend: {
-                    position: "bottom",
-                    labels: {
-                      color: "#FFFFFF",
-                    },
-                  },
-                  title: {
-                    display: true,
-                    text: "TPS Data for Top 10 Chains",
-                    color: "#FFFFFF",
-                  },
-                  tooltip: {
-                    callbacks: {
-                      label: function (context) {
-                        const value = context.parsed.y || 0;
-                        return `${context.dataset.label}: ${abbreviateNumber(
-                          value
-                        )}`;
-                      },
-                    },
-                    backgroundColor: "rgba(0,0,0,0.7)",
-                    titleColor: "#FFFFFF",
-                    bodyColor: "#FFFFFF",
-                  },
-                },
-                scales: {
-                  x: {
-                    type: "time",
-                    time: {
-                      unit: "month",
-                      displayFormats: {
-                        month: "MMM YYYY",
+            {chartData ? (
+              <Line
+                data={chartData}
+                options={{
+                  responsive: true,
+                  plugins: {
+                    legend: {
+                      position: "bottom",
+                      labels: {
+                        color: "#FFFFFF",
                       },
                     },
                     title: {
                       display: true,
-                      text: "Month",
+                      text: "TPS Data for Top 10 Chains",
                       color: "#FFFFFF",
                     },
-                    ticks: {
-                      color: "#FFFFFF",
+                    tooltip: {
+                      callbacks: {
+                        label: function (context) {
+                          const value = context.parsed.y || 0;
+                          return `${context.dataset.label}: ${abbreviateNumber(
+                            value
+                          )}`;
+                        },
+                      },
+                      backgroundColor: "rgba(0,0,0,0.7)",
+                      titleColor: "#FFFFFF",
+                      bodyColor: "#FFFFFF",
                     },
                   },
-                  y: {
-                    title: {
-                      display: true,
-                      text: "TPS",
-                      color: "#FFFFFF",
+                  scales: {
+                    x: {
+                      type: "time",
+                      time: {
+                        unit: "month",
+                        displayFormats: {
+                          month: "MMM YYYY",
+                        },
+                      },
+                      title: {
+                        display: true,
+                        text: "Month",
+                        color: "#FFFFFF",
+                      },
+                      ticks: {
+                        color: "#FFFFFF",
+                      },
                     },
-                    ticks: {
-                      color: "#FFFFFF",
-                      beginAtZero: true,
-                      callback: function (value) {
-                        return abbreviateNumber(value);
+                    y: {
+                      title: {
+                        display: true,
+                        text: "TPS",
+                        color: "#FFFFFF",
+                      },
+                      ticks: {
+                        color: "#FFFFFF",
+                        beginAtZero: true,
+                        callback: function (value) {
+                          return abbreviateNumber(value);
+                        },
                       },
                     },
                   },
-                },
-              }}
-              height={100}
-            />
+                }}
+                height={120} // Increased height
+              />
+            ) : (
+              <div className="chart-placeholder">No data available</div>
+            )}
           </div>
         </div>
       </div>
@@ -377,36 +430,46 @@ const TpssPage = () => {
   );
 };
 
-const TableRow = React.memo(({ chain, tpsData, abbreviateNumber }) => {
-  const chainTpsData = tpsData[chain.name] || [];
-  const latestTps =
-    chainTpsData.length > 0
-      ? chainTpsData[chainTpsData.length - 1]?.tps || 0
-      : 0;
-  const maxTps =
-    chainTpsData.length > 0
-      ? Math.max(...chainTpsData.map((data) => data.tps || 0), 0)
-      : 0;
-
-  return (
-    <tr key={chain.id}>
-      <td>
-        <img
-          src={`https://s2.googleusercontent.com/s2/favicons?domain=${chain.blockScoutUrl}&sz=32`}
-          alt={`${chain.name} Logo`}
-          className="chain-logo"
-          onError={(e) => {
-            e.target.onerror = null;
-            e.target.src = "/path/to/placeholder/image.png"; // Use a valid placeholder image path
-          }}
-        />
-      </td>
-      <td>{chain.name}</td>
-      <td>{abbreviateNumber(latestTps)} TPS</td>
-      <td>{abbreviateNumber(maxTps)} TPS</td>
-      <td>{chain.vertical || "N/A"}</td>
-    </tr>
-  );
-});
+const TableRow = React.memo(
+  ({
+    blockScoutUrl,
+    chainName,
+    latestTps,
+    maxTps,
+    vertical,
+    abbreviateNumber,
+  }) => {
+    return (
+      <tr>
+        <td>
+          <img
+            src={`https://s2.googleusercontent.com/s2/favicons?domain=${blockScoutUrl}&sz=32`}
+            alt={`${chainName} Logo`}
+            className="chain-logo"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src =
+                "https://cdn-icons-png.flaticon.com/512/2815/2815428.png"; // Use a valid placeholder image path
+            }}
+          />
+        </td>
+        <td>{chainName}</td>
+        <td>{abbreviateNumber(latestTps)} TPS</td>
+        <td>{abbreviateNumber(maxTps)} TPS</td>
+        <td>{vertical || "N/A"}</td>
+      </tr>
+    );
+  },
+  (prevProps, nextProps) => {
+    // Custom comparison function to prevent re-renders if props haven't changed
+    return (
+      prevProps.chainName === nextProps.chainName &&
+      prevProps.latestTps === nextProps.latestTps &&
+      prevProps.maxTps === nextProps.maxTps &&
+      prevProps.vertical === nextProps.vertical &&
+      prevProps.blockScoutUrl === nextProps.blockScoutUrl
+    );
+  }
+);
 
 export default TpssPage;
