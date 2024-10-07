@@ -71,35 +71,13 @@ export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
 };
 
 // Fetch Active Accounts Data for a single chain
-export const fetchActiveAccountsData = async (
-  blockScoutUrl,
-  launchDate,
-  period
-) => {
+export const fetchActiveAccountsData = async (blockScoutUrl, launchDate) => {
   const normalizedUrl = blockScoutUrl.replace(/\/+$/, "");
   const formattedLaunchDate = moment(new Date(launchDate)).format("YYYY-MM-DD");
   const currentDate = moment().format("YYYY-MM-DD");
 
-  let fromDate;
-  switch (period) {
-    case "daily":
-      fromDate = currentDate;
-      break;
-    case "4months":
-      fromDate = moment().subtract(4, "months").format("YYYY-MM-DD");
-      break;
-    case "6months":
-      fromDate = moment().subtract(6, "months").format("YYYY-MM-DD");
-      break;
-    case "all":
-      fromDate = formattedLaunchDate;
-      break;
-    default:
-      throw new Error("Invalid period specified");
-  }
-
   const activeAccountsApiUrl = encodeURIComponent(
-    `${normalizedUrl}/api/v1/lines/activeAccounts?from=${fromDate}&to=${currentDate}&resolution=DAY`
+    `${normalizedUrl}/api/v1/lines/activeAccounts?from=${formattedLaunchDate}&to=${currentDate}&resolution=DAY`
   );
 
   const isDevelopment =
@@ -111,12 +89,10 @@ export const fetchActiveAccountsData = async (
   try {
     const response = await axios.get(`${proxyBaseUrl}${activeAccountsApiUrl}`);
 
-    console.log("Active accounts response:", response.data); // Log the entire response
-
     // Check if the chart is available
     if (!response.data.chart || !Array.isArray(response.data.chart)) {
       console.warn(`No active accounts data available for ${normalizedUrl}`);
-      return { activeAccounts: [] }; // Return an empty array instead of undefined
+      return { activeAccounts: [] };
     }
 
     const activeAccounts = response.data.chart.map((item) => ({
@@ -134,42 +110,49 @@ export const fetchActiveAccountsData = async (
   }
 };
 
-// Updated function to calculate active accounts across all chains
-// Fetch active accounts across all chains
+// Fetch active accounts across all chains and structure the data
 export const fetchAllActiveAccounts = async (sheetData) => {
-  const activeAccountsData = {};
+  let totalActiveAccountsCombined = 0;
+  const activeAccountsByChainDate = {};
 
   for (const chain of sheetData) {
-    const { blockScoutUrl, launchDate, name, raas } = chain;
+    const { blockScoutUrl, launchDate, name } = chain;
+    const chainName = name?.trim();
 
-    // Ensure we only process chains with Gelato as RaaS
-    if (raas !== "Gelato") continue;
+    // Skip if essential data is missing
+    if (!chainName || !blockScoutUrl || !launchDate) {
+      console.warn(
+        `Skipping chain with missing data: ${JSON.stringify(chain)}`
+      );
+      continue;
+    }
+
+    activeAccountsByChainDate[chainName] = {}; // Initialize to empty object
 
     try {
-      activeAccountsData[name] = {
-        daily: await fetchActiveAccountsData(
-          blockScoutUrl,
-          launchDate,
-          "daily"
-        ),
-        all: await fetchActiveAccountsData(blockScoutUrl, launchDate, "all"),
-        fourMonths: await fetchActiveAccountsData(
-          blockScoutUrl,
-          launchDate,
-          "4months"
-        ),
-        sixMonths: await fetchActiveAccountsData(
-          blockScoutUrl,
-          launchDate,
-          "6months"
-        ),
-      };
+      const { activeAccounts } = await fetchActiveAccountsData(
+        blockScoutUrl,
+        launchDate
+      );
+
+      activeAccounts.forEach(({ date, value }) => {
+        // Aggregate by chain and date
+        if (!activeAccountsByChainDate[chainName][date]) {
+          activeAccountsByChainDate[chainName][date] = 0;
+        }
+        activeAccountsByChainDate[chainName][date] += value;
+
+        totalActiveAccountsCombined += value;
+      });
     } catch (error) {
-      console.error(`Error fetching active accounts for ${name}:`, error);
+      console.error(`Error fetching active accounts for ${chainName}:`, error);
     }
   }
 
-  return activeAccountsData;
+  return {
+    activeAccountsByChainDate,
+    totalActiveAccountsCombined,
+  };
 };
 
 // Updated function to calculate transactions across all chains
@@ -246,50 +229,3 @@ export const fetchAllTransactions = async (sheetData) => {
     totalTransactionsCombined,
   };
 };
-
-// Function to fetch latest TPS data
-// Function to fetch latest TPS data
-// export const fetchLatestTpsData = async () => {
-//   const baseUrl = `https://l2beat.com/api/trpc/activity.chart?batch=1&input=%7B%220%22%3A%7B%22json%22%3A%7B%22range%22%3A%22max%22%2C%22filter%22%3A%7B%22type%22%3A%22projects%22%2C%22projectIds%22%3A%5B%22arbitrum%22%5D%7D%7D%7D%7D`;
-
-//   // Proxy server logic
-//   const isDevelopment =
-//     !process.env.NODE_ENV || process.env.NODE_ENV === "development";
-//   const proxyBaseUrl = isDevelopment
-//     ? "http://localhost:3000/api/proxy?url="
-//     : "/api/proxy?url=";
-
-//   try {
-//     const response = await axios.get(
-//       `${proxyBaseUrl}${encodeURIComponent(baseUrl)}`
-//     );
-//     console.log("Proxy response:", response.data); // Log the full response from proxy
-
-//     // Check if response contains the expected structure
-//     if (
-//       !response.data ||
-//       !response.data[0] ||
-//       !response.data[0].result ||
-//       !response.data[0].result.data ||
-//       !response.data[0].result.data.json
-//     ) {
-//       throw new Error("Invalid response structure from the proxy");
-//     }
-
-//     const data = response.data[0].result.data.json;
-
-//     // Get the latest TPS data (last entry)
-//     const latestData = data[data.length - 1]; // Get the last entry
-//     const timestamp = latestData[0];
-//     const tps = latestData[1];
-
-//     console.log(`Latest TPS Data: Timestamp: ${timestamp}, TPS: ${tps}`);
-//     return {
-//       timestamp,
-//       tps,
-//     };
-//   } catch (error) {
-//     console.error(`Error fetching TPS data:`, error.message);
-//     throw error;
-//   }
-// };

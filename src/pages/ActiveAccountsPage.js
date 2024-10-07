@@ -1,3 +1,5 @@
+// ActiveAccountsPage.js
+
 import React, { useState, useEffect } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -25,6 +27,7 @@ import {
 import { abbreviateNumber } from "../utils/numberFormatter";
 import moment from "moment";
 
+// Register required components for Chart.js
 ChartJS.register(
   LineElement,
   PointElement,
@@ -38,60 +41,75 @@ ChartJS.register(
 );
 
 const ActiveAccountsPage = () => {
+  const [currency, setCurrency] = useState("ETH");
   const [timeRange, setTimeRange] = useState("Monthly");
   const [gelatoChains, setGelatoChains] = useState([]);
   const [allChains, setAllChains] = useState([]);
   const [activeAccountsByChainDate, setActiveAccountsByChainDate] = useState(
     {}
   );
-  const [chartData, setChartData] = useState({ labels: [], datasets: [] });
+  const [chartData, setChartData] = useState(null);
   const [topChains, setTopChains] = useState([]);
   const [totalActiveAccountsByChain, setTotalActiveAccountsByChain] = useState(
     {}
   );
+  const [activeAccountsByRaas, setActiveAccountsByRaas] = useState({});
   const [error, setError] = useState(null);
   const [filteredDates, setFilteredDates] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
+      setLoading(true);
       try {
+        // Fetch data
         const gelatoData = await fetchGelatoSheetData();
         const sheetData = await fetchGoogleSheetData();
         const activeAccountsData = await fetchAllActiveAccounts(sheetData);
 
-        setGelatoChains(gelatoData);
-        setAllChains(sheetData);
-        setActiveAccountsByChainDate(
-          activeAccountsData.activeAccountsByChainDate
-        );
+        const data = {
+          gelatoData,
+          sheetData,
+          activeAccountsData,
+        };
 
-        // Log the active accounts data to debug
-        console.log(
-          "Active Accounts by Chain Date:",
-          activeAccountsData.activeAccountsByChainDate
-        );
-
-        const dates = getFilteredDates();
-        setFilteredDates(dates);
-
-        populateStateWithData(dates, activeAccountsData);
+        populateStateWithData(data);
       } catch (error) {
         console.error("Error during data fetching:", error);
-        setError("Failed to load active account data. Please try again later.");
+        setError(
+          "Failed to load active accounts data. Please try again later."
+        );
+      } finally {
+        setLoading(false);
       }
     };
 
     fetchData();
   }, [timeRange]);
 
-  const populateStateWithData = (dates, activeAccountsData) => {
-    const chainTotals = allChains.map((chain) => {
-      const activeCounts = dates.map(
-        (date) => activeAccountsByChainDate[chain.name]?.[date] || 0 // Provide a fallback to 0
-      );
-      const total = activeCounts.reduce((acc, val) => acc + val, 0);
-      return { name: chain.name, total };
-    });
+  const populateStateWithData = (data) => {
+    const { gelatoData, sheetData, activeAccountsData } = data;
+
+    setGelatoChains(gelatoData);
+    setAllChains(sheetData);
+    setActiveAccountsByChainDate(activeAccountsData.activeAccountsByChainDate);
+
+    const dates = getFilteredDates();
+    setFilteredDates(dates);
+
+    // Aggregate data based on the selected time range
+    const chainTotals = sheetData
+      .map((chain) => {
+        const chainName = chain.name?.trim();
+        if (!chainName) return null; // Skip if chain name is missing
+        const chainActiveAccounts = activeAccountsByChainDate[chainName] || {};
+        const activeAccountCounts = dates.map(
+          (date) => chainActiveAccounts[date] || 0
+        );
+        const total = activeAccountCounts.reduce((acc, val) => acc + val, 0);
+        return { name: chainName, total };
+      })
+      .filter((item) => item !== null); // Remove null entries
 
     chainTotals.sort((a, b) => b.total - a.total);
     const topSevenChains = chainTotals.slice(0, 7).map((chain) => chain.name);
@@ -103,21 +121,33 @@ const ActiveAccountsPage = () => {
     );
     setTotalActiveAccountsByChain(totalActiveAccountsByChainData);
 
+    const activeAccountsByRaasData = sheetData.reduce((acc, chain) => {
+      const raasProvider = chain.raas;
+      const chainName = chain.name?.trim();
+      if (!chainName || !raasProvider) return acc;
+      if (!acc[raasProvider]) {
+        acc[raasProvider] = 0;
+      }
+      acc[raasProvider] += totalActiveAccountsByChainData[chainName] || 0;
+      return acc;
+    }, {});
+    setActiveAccountsByRaas(activeAccountsByRaasData);
+
+    // Generate labels and keys for the last six months
     const { labels, keys } = getLastSixMonths();
 
+    // Aggregate active accounts per chain per month
     const activeAccountsByChainMonth = {};
     topSevenChains.forEach((chainName) => {
+      const chainActiveAccounts = activeAccountsByChainDate[chainName] || {};
       activeAccountsByChainMonth[chainName] = keys.map((monthKey) => {
-        return Object.keys(activeAccountsByChainDate[chainName] || {})
+        return Object.keys(chainActiveAccounts)
           .filter((date) => moment(date).format("YYYY-MM") === monthKey)
-          .reduce(
-            (sum, date) =>
-              sum + (activeAccountsByChainDate[chainName]?.[date] || 0),
-            0
-          );
+          .reduce((sum, date) => sum + (chainActiveAccounts[date] || 0), 0);
       });
     });
 
+    // Prepare datasets for the line chart
     const datasets = topSevenChains.map((chainName) => ({
       label: chainName,
       data: activeAccountsByChainMonth[chainName],
@@ -127,13 +157,15 @@ const ActiveAccountsPage = () => {
       tension: 0.1,
     }));
 
-    setChartData({ labels, datasets });
+    setChartData({
+      labels,
+      datasets,
+    });
   };
 
   const getFilteredDates = () => {
     const today = moment().format("YYYY-MM-DD");
     let startDate;
-
     switch (timeRange) {
       case "Daily":
         startDate = today;
@@ -175,39 +207,56 @@ const ActiveAccountsPage = () => {
     return { labels: months, keys };
   };
 
+  // Function to handle the toggle between ETH and USD (if applicable)
+  const handleToggleCurrency = (selectedCurrency) => {
+    setCurrency(selectedCurrency);
+  };
+
+  // Function to handle the time range selection
   const handleTimeRangeChange = (range) => {
     setTimeRange(range);
   };
 
+  // Utility functions
   const getColorForChain = (chainName) => {
-    const colorMap = {
-      Playnance: "#FF6384",
-      Anomaly: "#36A2EB",
-      "Aleph Zero": "#FFCE56",
-      Everclear: "#4BC0C0",
-      Fox: "#9966FF",
-      Ethernity: "#FF9F40",
-      Camp: "#C9CBCF",
-      Gameswift: "#E7E9ED",
-      "SX Network": "#36A2EB",
-      "Event Horizon": "#FF6384",
-      Arenaz: "#FFCE56",
-      "Edu Chain": "#4BC0C0",
-      Caldera: "#EC6731",
-      Lisk: "#FFA500", // Example color for Lisk
-    };
-    return colorMap[chainName] || getRandomColor();
-  };
-
-  const getRandomColor = () => {
-    const letters = "0123456789ABCDEF";
-    let color = "#";
-    for (let i = 0; i < 6; i++) {
-      color += letters[Math.floor(Math.random() * 16)];
+    // Generate a consistent color for each chain based on its name
+    const colors = [
+      "#FF6384",
+      "#36A2EB",
+      "#FFCE56",
+      "#4BC0C0",
+      "#9966FF",
+      "#FF9F40",
+      "#C9CBCF",
+      "#E7E9ED",
+      "#EC6731",
+      "#B28AFE",
+      "#FF5733",
+      "#33FF57",
+      "#3357FF",
+      "#8E44AD",
+      "#2ECC71",
+    ];
+    let hash = 0;
+    for (let i = 0; i < chainName.length; i++) {
+      hash = chainName.charCodeAt(i) + ((hash << 5) - hash);
     }
-    return color;
+    const colorIndex = Math.abs(hash) % colors.length;
+    return colors[colorIndex];
   };
 
+  // Prepare the data for the bar chart, excluding any provider with zero active accounts
+  const filteredActiveAccountsByRaas = Object.keys(activeAccountsByRaas).reduce(
+    (acc, provider) => {
+      if (activeAccountsByRaas[provider] > 0) {
+        acc[provider] = activeAccountsByRaas[provider];
+      }
+      return acc;
+    },
+    {}
+  );
+
+  // Pie Chart Data
   const pieData = {
     labels: [...Object.keys(totalActiveAccountsByChain).slice(0, 12), "Others"],
     datasets: [
@@ -222,34 +271,22 @@ const ActiveAccountsPage = () => {
           ...Object.keys(totalActiveAccountsByChain)
             .slice(0, 12)
             .map((chain) => getColorForChain(chain)),
-          "#808080", // Grey color for 'Others'
+          "#808080",
         ],
       },
     ],
   };
 
-  const filteredActiveAccountsByRaas = Object.keys(
-    totalActiveAccountsByChain
-  ).reduce((acc, provider) => {
-    if (totalActiveAccountsByChain[provider] > 0) {
-      acc[provider] = totalActiveAccountsByChain[provider];
-    }
-    return acc;
-  }, {});
-
+  // Bar Chart Data
   const barData = {
     labels: Object.keys(filteredActiveAccountsByRaas),
     datasets: [
       {
-        label: "Active Account Count by RaaS Provider",
+        label: "Active Accounts by RaaS Provider",
         data: Object.values(filteredActiveAccountsByRaas),
-        backgroundColor: [
-          "#ff3b57", // Gelato
-          "#46BDC6", // Conduit
-          "#4185F4", // Alchemy
-          "#EC6731", // Caldera
-          "#B28AFE", // Altlayer
-        ].slice(0, Object.keys(filteredActiveAccountsByRaas).length),
+        backgroundColor: Object.keys(filteredActiveAccountsByRaas).map(
+          (provider) => getColorForChain(provider)
+        ),
       },
     ],
   };
@@ -258,7 +295,30 @@ const ActiveAccountsPage = () => {
     <div className="active-accounts-page">
       <Sidebar />
       <div className="main-content">
-        <div className="transactions-header">
+        {/* Currency Toggle (if applicable) */}
+        <div className="currency-toggle">
+          <div className="toggle-container">
+            <button
+              className={
+                currency === "ETH" ? "toggle-option active" : "toggle-option"
+              }
+              onClick={() => handleToggleCurrency("ETH")}
+            >
+              ETH
+            </button>
+            <button
+              className={
+                currency === "USD" ? "toggle-option active" : "toggle-option"
+              }
+              onClick={() => handleToggleCurrency("USD")}
+            >
+              USD
+            </button>
+          </div>
+        </div>
+
+        {/* Active Accounts Header */}
+        <div className="active-accounts-header">
           <div className="heading-container">
             <FontAwesomeIcon icon={faUsers} className="icon" />
             <h2>Active Accounts</h2>
@@ -269,218 +329,250 @@ const ActiveAccountsPage = () => {
           </p>
         </div>
 
+        {/* Error Message */}
         {error && <div className="error-message">{error}</div>}
 
-        <div className="time-range-selector">
-          <div className="time-range-left">
-            <button
-              className={timeRange === "Daily" ? "active" : ""}
-              onClick={() => handleTimeRangeChange("Daily")}
-            >
-              Daily
-            </button>
-            <button
-              className={timeRange === "Monthly" ? "active" : ""}
-              onClick={() => handleTimeRangeChange("Monthly")}
-            >
-              Monthly
-            </button>
-          </div>
-          <div className="time-range-right">
-            <button
-              className={timeRange === "FourMonths" ? "active" : ""}
-              onClick={() => handleTimeRangeChange("FourMonths")}
-            >
-              4 Months
-            </button>
-            <button
-              className={timeRange === "SixMonths" ? "active" : ""}
-              onClick={() => handleTimeRangeChange("SixMonths")}
-            >
-              6 Months
-            </button>
-            <button
-              className={timeRange === "All" ? "active" : ""}
-              onClick={() => handleTimeRangeChange("All")}
-            >
-              All
-            </button>
-          </div>
-        </div>
+        {/* Loading Indicator */}
+        {loading && <div className="loading">Loading data...</div>}
 
-        <div className="table-chart-container">
-          <div className="chain-list">
-            {gelatoChains.map((chain, index) => {
-              const activeCounts = filteredDates.map(
-                (date) => activeAccountsByChainDate[chain.name]?.[date] || 0 // Provide a fallback to 0
-              );
-              const activeCount = activeCounts.reduce(
-                (acc, val) => acc + val,
-                0
-              );
+        {/* Time Range Selector */}
+        {!loading && (
+          <div className="time-range-selector">
+            <div className="time-range-left">
+              <button
+                className={timeRange === "Daily" ? "active" : ""}
+                onClick={() => handleTimeRangeChange("Daily")}
+              >
+                Daily
+              </button>
+              <button
+                className={timeRange === "Monthly" ? "active" : ""}
+                onClick={() => handleTimeRangeChange("Monthly")}
+              >
+                Monthly
+              </button>
+            </div>
+            <div className="time-range-right">
+              <button
+                className={timeRange === "FourMonths" ? "active" : ""}
+                onClick={() => handleTimeRangeChange("FourMonths")}
+              >
+                4 Months
+              </button>
+              <button
+                className={timeRange === "SixMonths" ? "active" : ""}
+                onClick={() => handleTimeRangeChange("SixMonths")}
+              >
+                6 Months
+              </button>
+              <button
+                className={timeRange === "All" ? "active" : ""}
+                onClick={() => handleTimeRangeChange("All")}
+              >
+                All
+              </button>
+            </div>
+          </div>
+        )}
 
-              return (
-                <div key={index} className="chain-item">
-                  <img
-                    src={`https://s2.googleusercontent.com/s2/favicons?domain=${chain.blockScoutUrl}&sz=32`}
-                    alt={`${chain.name} Logo`}
-                    className="chain-logo"
-                  />
-                  <span className="chain-name">
-                    {chain.name}
+        {/* Table and Chart Section */}
+        {!loading && (
+          <div className="table-chart-container">
+            {/* Gelato Chain List */}
+            <div className="chain-list">
+              {gelatoChains.map((chain, index) => {
+                const chainName = chain.name?.trim();
+                if (!chainName) return null;
+                const chainActiveAccounts =
+                  activeAccountsByChainDate[chainName] || {};
+                const activeAccountCounts = filteredDates.map(
+                  (date) => chainActiveAccounts[date] || 0
+                );
+                const activeAccountCount = activeAccountCounts.reduce(
+                  (acc, val) => acc + val,
+                  0
+                );
+
+                return (
+                  <div key={index} className="chain-item">
                     <img
-                      src={GelatoLogo}
-                      alt="RaaS Logo"
-                      className="raas-logo"
+                      src={`https://s2.googleusercontent.com/s2/favicons?domain=${chain.blockScoutUrl}&sz=32`}
+                      alt={`${chain.name} Logo`}
+                      className="chain-logo"
                     />
-                  </span>
-                  <span className="transactions">
-                    {abbreviateNumber(activeCount)}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
+                    <span className="chain-name">
+                      {chain.name}
+                      <img
+                        src={GelatoLogo}
+                        alt="RaaS Logo"
+                        className="raas-logo"
+                      />
+                    </span>
+                    <span className="active-accounts">
+                      {abbreviateNumber(activeAccountCount)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
 
-          <div className="line-chart">
-            <Line
-              data={chartData}
-              options={{
-                responsive: true,
-                plugins: {
-                  legend: {
-                    position: "bottom",
-                    labels: {
-                      color: "#FFFFFF",
-                    },
-                  },
-                  title: {
-                    display: true,
-                    text: "Active Accounts - Last 6 Months",
-                    color: "#FFFFFF",
-                  },
-                  tooltip: {
-                    callbacks: {
-                      label: function (context) {
-                        return `${context.dataset.label}: ${abbreviateNumber(
-                          context.parsed.y
-                        )}`;
+            {/* Line Chart Section */}
+            <div className="line-chart">
+              {chartData ? (
+                <Line
+                  data={chartData}
+                  options={{
+                    responsive: true,
+                    plugins: {
+                      legend: {
+                        position: "bottom",
+                        labels: {
+                          color: "#FFFFFF",
+                        },
+                      },
+                      title: {
+                        display: true,
+                        text: `Active Accounts - Last 6 Months`,
+                        color: "#FFFFFF",
+                      },
+                      tooltip: {
+                        callbacks: {
+                          label: function (context) {
+                            return `${
+                              context.dataset.label
+                            }: ${abbreviateNumber(context.parsed.y)}`;
+                          },
+                        },
+                        backgroundColor: "rgba(0,0,0,0.7)",
+                        titleColor: "#FFFFFF",
+                        bodyColor: "#FFFFFF",
                       },
                     },
-                    backgroundColor: "rgba(0,0,0,0.7)",
-                    titleColor: "#FFFFFF",
-                    bodyColor: "#FFFFFF",
-                  },
-                },
-                scales: {
-                  x: {
-                    title: {
-                      display: true,
-                      text: "Months",
-                      color: "#FFFFFF",
-                    },
-                    ticks: {
-                      color: "#FFFFFF",
-                      maxRotation: 0,
-                      minRotation: 0,
-                    },
-                  },
-                  y: {
-                    title: {
-                      display: true,
-                      text: "Number of Active Accounts",
-                      color: "#FFFFFF",
-                    },
-                    ticks: {
-                      color: "#FFFFFF",
-                      beginAtZero: true,
-                      callback: function (value) {
-                        return abbreviateNumber(value);
+                    scales: {
+                      x: {
+                        title: {
+                          display: true,
+                          text: "Months",
+                          color: "#FFFFFF",
+                        },
+                        ticks: {
+                          color: "#FFFFFF",
+                          maxRotation: 0,
+                          minRotation: 0,
+                        },
+                      },
+                      y: {
+                        title: {
+                          display: true,
+                          text: "Number of Active Accounts",
+                          color: "#FFFFFF",
+                        },
+                        ticks: {
+                          color: "#FFFFFF",
+                          beginAtZero: true,
+                          callback: function (value) {
+                            return abbreviateNumber(value);
+                          },
+                        },
                       },
                     },
-                  },
-                },
-              }}
-            />
+                  }}
+                />
+              ) : (
+                <div className="chart-placeholder">No data available</div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
-        <div className="additional-charts">
-          <div className="pie-chart">
-            <h3>Market Share of Each Chain</h3>
-            <Pie
-              data={pieData}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: {
-                    position: "bottom",
-                    labels: {
-                      color: "#FFFFFF",
-                      padding: 20,
-                    },
-                  },
-                  tooltip: {
-                    callbacks: {
-                      label: function (context) {
-                        const total = context.dataset.data.reduce(
-                          (a, b) => a + b,
-                          0
-                        );
-                        const currentValue = context.raw;
-                        const percentage = (
-                          (currentValue / total) *
-                          100
-                        ).toFixed(2);
-                        const formattedValue = abbreviateNumber(currentValue);
-                        return `${context.label}: ${formattedValue} (${percentage}%)`;
+        {/* Additional Chart Section */}
+        {!loading && (
+          <div className="additional-charts">
+            <div className="pie-chart">
+              <h3>Market Share of Active Accounts by Chain</h3>
+              {pieData.datasets[0].data.some((value) => value > 0) ? (
+                <Pie
+                  data={pieData}
+                  options={{
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                      legend: {
+                        position: "bottom",
+                        labels: {
+                          color: "#FFFFFF",
+                          padding: 20,
+                        },
+                      },
+                      tooltip: {
+                        callbacks: {
+                          label: function (context) {
+                            const total = context.dataset.data.reduce(
+                              (a, b) => a + b,
+                              0
+                            );
+                            const currentValue = context.raw;
+                            const percentage = (
+                              (currentValue / total) *
+                              100
+                            ).toFixed(2);
+                            const formattedValue =
+                              abbreviateNumber(currentValue);
+                            return `${context.label}: ${formattedValue} (${percentage}%)`;
+                          },
+                        },
                       },
                     },
-                  },
-                },
-              }}
-            />
-          </div>
+                  }}
+                />
+              ) : (
+                <div className="chart-placeholder">No data available</div>
+              )}
+            </div>
 
-          <div className="bar-chart">
-            <h3>Active Accounts by RaaS Providers</h3>
-            <Bar
-              data={barData}
-              options={{
-                responsive: true,
-                plugins: {
-                  legend: {
-                    display: false,
-                  },
-                  tooltip: {
-                    callbacks: {
-                      label: function (context) {
-                        return abbreviateNumber(context.raw);
+            <div className="bar-chart">
+              <h3>Active Accounts by RaaS Providers</h3>
+              {barData.datasets[0].data.some((value) => value > 0) ? (
+                <Bar
+                  data={barData}
+                  options={{
+                    responsive: true,
+                    plugins: {
+                      legend: {
+                        display: false,
+                      },
+                      tooltip: {
+                        callbacks: {
+                          label: function (context) {
+                            return abbreviateNumber(context.raw);
+                          },
+                        },
                       },
                     },
-                  },
-                },
-                scales: {
-                  x: {
-                    ticks: {
-                      color: "#FFFFFF",
-                    },
-                  },
-                  y: {
-                    beginAtZero: true,
-                    ticks: {
-                      color: "#FFFFFF",
-                      callback: function (value) {
-                        return abbreviateNumber(value);
+                    scales: {
+                      x: {
+                        ticks: {
+                          color: "#FFFFFF",
+                        },
+                      },
+                      y: {
+                        beginAtZero: true,
+                        ticks: {
+                          color: "#FFFFFF",
+                          callback: function (value) {
+                            return abbreviateNumber(value);
+                          },
+                        },
                       },
                     },
-                  },
-                },
-              }}
-            />
+                  }}
+                />
+              ) : (
+                <div className="chart-placeholder">No data available</div>
+              )}
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );
