@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faUsers } from "@fortawesome/free-solid-svg-icons";
+import { faChartLine } from "@fortawesome/free-solid-svg-icons";
 import GelatoLogo from "../assets/logos/raas/Gelato.png";
-import "./ActiveAccountsPage.css";
+import "./DailyTransactionsPage.css";
 import {
   Chart as ChartJS,
   LineElement,
@@ -20,12 +20,13 @@ import { Line, Pie, Bar } from "react-chartjs-2";
 import { fetchGelatoSheetData } from "../services/googleSheetGelatoService";
 import {
   fetchGoogleSheetData,
-  fetchAllActiveAccounts,
+  fetchAllTransactions,
 } from "../services/googleSheetService";
 import { abbreviateNumber } from "../utils/numberFormatter";
 import moment from "moment";
-import debounce from "lodash.debounce"; // Import debounce
+import { saveData, getData } from "../services/indexedDBService"; // Import IndexedDB functions
 
+// Register required components for Chart.js
 ChartJS.register(
   LineElement,
   PointElement,
@@ -38,65 +39,81 @@ ChartJS.register(
   BarElement
 );
 
-const ActiveAccountsPage = () => {
+const DAILY_DATA_ID = "dailyTransactionData"; // Unique ID for IndexedDB
+
+const DailyTransactionsPage = () => {
+  const [currency, setCurrency] = useState("ETH");
   const [timeRange, setTimeRange] = useState("Monthly");
   const [gelatoChains, setGelatoChains] = useState([]);
   const [allChains, setAllChains] = useState([]);
-  const [activeAccountsByChain, setActiveAccountsByChain] = useState({});
-  const [activeAccountsByChainDate, setActiveAccountsByChainDate] = useState(
-    {}
-  );
-  const [chartData, setChartData] = useState({ labels: [], datasets: [] });
+  const [transactionsByChain, setTransactionsByChain] = useState({});
+  const [transactionsByChainDate, setTransactionsByChainDate] = useState({});
+  const [chartData, setChartData] = useState({
+    labels: [],
+    datasets: [],
+  });
   const [topChains, setTopChains] = useState([]);
-  const [totalActiveAccountsByChain, setTotalActiveAccountsByChain] = useState(
-    {}
-  );
+  const [totalTransactionsByChain, setTotalTransactionsByChain] = useState({});
+  const [transactionsByRaas, setTransactionsByRaas] = useState({});
   const [error, setError] = useState(null);
   const [filteredDates, setFilteredDates] = useState([]);
-  const [loading, setLoading] = useState(true); // Loading state
+  const SIX_HOURS_IN_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
 
   useEffect(() => {
-    const fetchData = debounce(async () => {
-      setLoading(true);
+    const fetchData = async () => {
       try {
+        // Retrieve data from IndexedDB
+        const storedRecord = await getData(DAILY_DATA_ID);
+
+        const sixHoursAgo = Date.now() - SIX_HOURS_IN_MS;
+
+        if (storedRecord && storedRecord.timestamp > sixHoursAgo) {
+          // Use stored data if it's less than 6 hours old
+          populateStateWithData(storedRecord.data);
+          return;
+        }
+
+        // Fetch new data if no valid stored data is available
         const gelatoData = await fetchGelatoSheetData();
         const sheetData = await fetchGoogleSheetData();
-        const activeAccountsData = await fetchAllActiveAccounts(
+        const transactionsData = await fetchAllTransactions(sheetData);
+
+        const newData = {
+          gelatoData,
           sheetData,
-          timeRange
-        );
+          transactionsData,
+        };
 
-        setGelatoChains(gelatoData);
-        setAllChains(sheetData);
-        setActiveAccountsByChain(activeAccountsData.activeAccountsByChain);
-        setActiveAccountsByChainDate(
-          activeAccountsData.activeAccountsByChainDate
-        );
+        // Save new data to IndexedDB
+        await saveData(DAILY_DATA_ID, newData);
 
-        const dates = getFilteredDates();
-        setFilteredDates(dates);
-
-        populateStateWithData(dates, activeAccountsData);
+        populateStateWithData(newData);
       } catch (error) {
         console.error("Error during data fetching:", error);
-        setError("Failed to load active account data. Please try again later.");
-      } finally {
-        setLoading(false); // Reset loading state
+        setError("Failed to load transaction data. Please try again later.");
       }
-    }, 300); // Debounce delay in milliseconds
+    };
 
     fetchData();
-    return () => {
-      fetchData.cancel(); // Cleanup debounce on unmount
-    };
-  }, [timeRange]);
+  }, [timeRange]); // Re-run when timeRange changes
 
-  const populateStateWithData = (dates, activeAccountsData) => {
-    const chainTotals = allChains.map((chain) => {
-      const activeCounts = dates.map(
-        (date) => activeAccountsByChainDate[chain.name]?.[date] || 0
+  const populateStateWithData = (data) => {
+    const { gelatoData, sheetData, transactionsData } = data;
+
+    setGelatoChains(gelatoData);
+    setAllChains(sheetData);
+    setTransactionsByChain(transactionsData.transactionsByChain);
+    setTransactionsByChainDate(transactionsData.transactionsByChainDate);
+
+    const dates = getFilteredDates();
+    setFilteredDates(dates);
+
+    // Aggregate data based on the selected time range
+    const chainTotals = sheetData.map((chain) => {
+      const transactionCounts = dates.map(
+        (date) => transactionsByChainDate[chain.name]?.[date] || 0
       );
-      const total = activeCounts.reduce((acc, val) => acc + val, 0);
+      const total = transactionCounts.reduce((acc, val) => acc + val, 0);
       return { name: chain.name, total };
     });
 
@@ -104,37 +121,53 @@ const ActiveAccountsPage = () => {
     const topSevenChains = chainTotals.slice(0, 7).map((chain) => chain.name);
     setTopChains(topSevenChains);
 
-    const totalActiveAccountsByChainData = chainTotals.reduce(
+    const totalTransactionsByChainData = chainTotals.reduce(
       (acc, { name, total }) => ({ ...acc, [name]: total }),
       {}
     );
-    setTotalActiveAccountsByChain(totalActiveAccountsByChainData);
+    setTotalTransactionsByChain(totalTransactionsByChainData);
 
+    const transactionsByRaasData = sheetData.reduce((acc, chain) => {
+      const raasProvider = chain.raas;
+      if (!acc[raasProvider]) {
+        acc[raasProvider] = 0;
+      }
+      acc[raasProvider] += totalTransactionsByChainData[chain.name] || 0;
+      return acc;
+    }, {});
+    setTransactionsByRaas(transactionsByRaasData);
+
+    // Generate labels and keys for the last six months
     const { labels, keys } = getLastSixMonths();
-    const activeAccountsByChainMonth = {};
 
+    // Aggregate transactions per chain per month
+    const transactionsByChainMonth = {};
     topSevenChains.forEach((chainName) => {
-      activeAccountsByChainMonth[chainName] = keys.map((monthKey) => {
-        return Object.keys(activeAccountsByChainDate[chainName] || {})
+      transactionsByChainMonth[chainName] = keys.map((monthKey) => {
+        return Object.keys(transactionsByChainDate[chainName] || {})
           .filter((date) => moment(date).format("YYYY-MM") === monthKey)
           .reduce(
             (sum, date) =>
-              sum + (activeAccountsByChainDate[chainName][date] || 0),
+              sum + (transactionsByChainDate[chainName][date] || 0),
             0
           );
       });
     });
 
+    // Prepare datasets for the line chart
     const datasets = topSevenChains.map((chainName) => ({
       label: chainName,
-      data: activeAccountsByChainMonth[chainName],
+      data: transactionsByChainMonth[chainName],
       fill: false,
       borderColor: getColorForChain(chainName),
       backgroundColor: getColorForChain(chainName),
       tension: 0.1,
     }));
 
-    setChartData({ labels, datasets });
+    setChartData({
+      labels,
+      datasets,
+    });
   };
 
   const getFilteredDates = () => {
@@ -181,10 +214,17 @@ const ActiveAccountsPage = () => {
     return { labels: months, keys };
   };
 
+  // Function to handle the toggle between ETH and USD
+  const handleToggleCurrency = (selectedCurrency) => {
+    setCurrency(selectedCurrency);
+  };
+
+  // Function to handle the time range selection
   const handleTimeRangeChange = (range) => {
     setTimeRange(range);
   };
 
+  // Utility functions
   const getColorForChain = (chainName) => {
     const colorMap = {
       Playnance: "#FF6384",
@@ -213,18 +253,30 @@ const ActiveAccountsPage = () => {
     return color;
   };
 
+  // Prepare the data for the bar chart, excluding any provider with zero transactions
+  const filteredTransactionsByRaas = Object.keys(transactionsByRaas).reduce(
+    (acc, provider) => {
+      if (transactionsByRaas[provider] > 0) {
+        acc[provider] = transactionsByRaas[provider];
+      }
+      return acc;
+    },
+    {}
+  );
+
+  // Pie Chart Data
   const pieData = {
-    labels: [...Object.keys(totalActiveAccountsByChain).slice(0, 12), "Others"],
+    labels: [...Object.keys(totalTransactionsByChain).slice(0, 12), "Others"],
     datasets: [
       {
         data: [
-          ...Object.values(totalActiveAccountsByChain).slice(0, 12),
-          Object.values(totalActiveAccountsByChain)
+          ...Object.values(totalTransactionsByChain).slice(0, 12),
+          Object.values(totalTransactionsByChain)
             .slice(12)
             .reduce((acc, val) => acc + val, 0),
         ],
         backgroundColor: [
-          ...Object.keys(totalActiveAccountsByChain)
+          ...Object.keys(totalTransactionsByChain)
             .slice(0, 12)
             .map((chain) => getColorForChain(chain)),
           "#808080", // Grey color for 'Others'
@@ -233,49 +285,66 @@ const ActiveAccountsPage = () => {
     ],
   };
 
-  const filteredActiveAccountsByRaas = Object.keys(
-    totalActiveAccountsByChain
-  ).reduce((acc, provider) => {
-    if (totalActiveAccountsByChain[provider] > 0) {
-      acc[provider] = totalActiveAccountsByChain[provider];
-    }
-    return acc;
-  }, {});
-
+  // Bar Chart Data
   const barData = {
-    labels: Object.keys(filteredActiveAccountsByRaas),
+    labels: Object.keys(filteredTransactionsByRaas),
     datasets: [
       {
-        label: "Active Account Count by RaaS Provider",
-        data: Object.values(filteredActiveAccountsByRaas),
+        label: "Transaction Count by RaaS Provider",
+        data: Object.values(filteredTransactionsByRaas),
         backgroundColor: [
           "#ff3b57", // Gelato
           "#46BDC6", // Conduit
           "#4185F4", // Alchemy
           "#EC6731", // Caldera
           "#B28AFE", // Altlayer
-        ].slice(0, Object.keys(filteredActiveAccountsByRaas).length),
+        ].slice(0, Object.keys(filteredTransactionsByRaas).length),
       },
     ],
   };
 
   return (
-    <div className="active-accounts-page">
+    <div className="daily-transactions-page">
       <Sidebar />
       <div className="main-content">
+        {/* Currency Toggle */}
+        <div className="currency-toggle">
+          <div className="toggle-container">
+            <button
+              className={
+                currency === "ETH" ? "toggle-option active" : "toggle-option"
+              }
+              onClick={() => handleToggleCurrency("ETH")}
+            >
+              ETH
+            </button>
+            <button
+              className={
+                currency === "USD" ? "toggle-option active" : "toggle-option"
+              }
+              onClick={() => handleToggleCurrency("USD")}
+            >
+              USD
+            </button>
+          </div>
+        </div>
+
+        {/* Transactions Header */}
         <div className="transactions-header">
           <div className="heading-container">
-            <FontAwesomeIcon icon={faUsers} className="icon" />
-            <h2>Active Accounts</h2>
+            <FontAwesomeIcon icon={faChartLine} className="icon" />
+            <h2>Daily Transactions</h2>
           </div>
           <p className="description">
-            Tracks the total number of active accounts on the blockchain each
-            day
+            Tracks the total number of transactions executed on the blockchain
+            each day
           </p>
         </div>
 
+        {/* Error Message */}
         {error && <div className="error-message">{error}</div>}
 
+        {/* Time Range Selector */}
         <div className="time-range-selector">
           <div className="time-range-left">
             <button
@@ -313,13 +382,15 @@ const ActiveAccountsPage = () => {
           </div>
         </div>
 
+        {/* Table and Chart Section */}
         <div className="table-chart-container">
+          {/* Gelato Chain List */}
           <div className="chain-list">
             {gelatoChains.map((chain, index) => {
-              const activeCounts = filteredDates.map(
-                (date) => activeAccountsByChainDate[chain.name]?.[date] || 0
+              const transactionCounts = filteredDates.map(
+                (date) => transactionsByChainDate[chain.name]?.[date] || 0
               );
-              const activeCount = activeCounts.reduce(
+              const transactionCount = transactionCounts.reduce(
                 (acc, val) => acc + val,
                 0
               );
@@ -340,164 +411,174 @@ const ActiveAccountsPage = () => {
                     />
                   </span>
                   <span className="transactions">
-                    {abbreviateNumber(activeCount)}
+                    {abbreviateNumber(transactionCount)}
                   </span>
                 </div>
               );
             })}
           </div>
 
-          {/* Conditional Rendering for Line Chart */}
-          {chartData.labels.length > 0 && (
-            <div className="line-chart">
-              <Line
-                data={chartData}
-                options={{
-                  responsive: true,
-                  plugins: {
-                    legend: {
-                      position: "bottom",
-                      labels: {
-                        color: "#FFFFFF",
-                      },
-                    },
-                    title: {
-                      display: true,
-                      text: `Active Accounts - Last 6 Months`,
+          {/* Line Chart Section */}
+          <div className="line-chart">
+            <Line
+              data={chartData}
+              options={{
+                responsive: true,
+                plugins: {
+                  legend: {
+                    position: "bottom",
+                    labels: {
                       color: "#FFFFFF",
                     },
-                    tooltip: {
-                      callbacks: {
-                        label: function (context) {
-                          return `${context.dataset.label}: ${abbreviateNumber(
-                            context.parsed.y
-                          )}`;
-                        },
+                  },
+                  title: {
+                    display: true,
+                    text: `Transactions - Last 6 Months`,
+                    color: "#FFFFFF",
+                  },
+                  tooltip: {
+                    callbacks: {
+                      label: function (context) {
+                        return `${context.dataset.label}: ${abbreviateNumber(
+                          context.parsed.y
+                        )}`;
                       },
-                      backgroundColor: "rgba(0,0,0,0.7)",
-                      titleColor: "#FFFFFF",
-                      bodyColor: "#FFFFFF",
+                    },
+                    backgroundColor: "rgba(0,0,0,0.7)",
+                    titleColor: "#FFFFFF",
+                    bodyColor: "#FFFFFF",
+                  },
+                },
+                scales: {
+                  x: {
+                    title: {
+                      display: true,
+                      text: "Months",
+                      color: "#FFFFFF",
+                    },
+                    ticks: {
+                      color: "#FFFFFF",
+                      maxRotation: 0,
+                      minRotation: 0,
                     },
                   },
-                  scales: {
-                    x: {
-                      title: {
-                        display: true,
-                        text: "Months",
-                        color: "#FFFFFF",
-                      },
-                      ticks: {
-                        color: "#FFFFFF",
-                        maxRotation: 0,
-                        minRotation: 0,
-                      },
+                  y: {
+                    title: {
+                      display: true,
+                      text: "Number of Transactions",
+                      color: "#FFFFFF",
                     },
-                    y: {
-                      title: {
-                        display: true,
-                        text: "Number of Active Accounts",
-                        color: "#FFFFFF",
-                      },
-                      ticks: {
-                        color: "#FFFFFF",
-                        beginAtZero: true,
-                        callback: function (value) {
-                          return abbreviateNumber(value);
-                        },
+                    ticks: {
+                      color: "#FFFFFF",
+                      beginAtZero: true,
+                      callback: function (value) {
+                        return abbreviateNumber(value);
                       },
                     },
                   },
-                }}
-              />
-            </div>
-          )}
+                },
+              }}
+            />
+          </div>
         </div>
 
+        {/* Additional Chart Section */}
         <div className="additional-charts">
-          {/* Conditional Rendering for Pie Chart */}
-          {totalActiveAccountsByChain && (
-            <div className="pie-chart">
-              <h3>Market Share of Each Chain</h3>
-              <Pie
-                data={pieData}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  plugins: {
-                    legend: {
-                      position: "bottom",
-                      labels: {
-                        color: "#FFFFFF",
-                        padding: 20,
-                      },
+          <div className="pie-chart">
+            <h3>Market Share of Each Chain</h3>
+            <Pie
+              data={pieData}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: "bottom",
+                    labels: {
+                      color: "#FFFFFF",
+                      padding: 20, // Increased padding between legend labels for better visibility
                     },
-                    tooltip: {
-                      callbacks: {
-                        label: function (context) {
-                          const total = context.dataset.data.reduce(
-                            (a, b) => a + b,
-                            0
-                          );
-                          const currentValue = context.raw;
-                          const percentage = (
-                            (currentValue / total) *
-                            100
-                          ).toFixed(2);
-                          const formattedValue = abbreviateNumber(currentValue);
-                          return `${context.label}: ${formattedValue} (${percentage}%)`;
-                        },
+                  },
+                  datalabels: {
+                    color: "#ffffff", // Label color for each slice
+                    formatter: (value, context) => {
+                      const total = context.dataset.data.reduce(
+                        (a, b) => a + b,
+                        0
+                      );
+                      const percentage = ((value / total) * 100).toFixed(1);
+                      return `${percentage}%`; // Display percentage on the pie slice
+                    },
+                    anchor: "end", // Position labels at the end of each slice
+                    align: "start", // Align labels slightly towards the inside of each slice
+                    font: {
+                      weight: "bold",
+                      size: 12, // Adjusted label size for better readability
+                    },
+                  },
+                  tooltip: {
+                    callbacks: {
+                      label: function (context) {
+                        const total = context.dataset.data.reduce(
+                          (a, b) => a + b,
+                          0
+                        );
+                        const currentValue = context.raw;
+                        const percentage = (
+                          (currentValue / total) *
+                          100
+                        ).toFixed(2);
+                        const formattedValue = abbreviateNumber(currentValue);
+                        return `${context.label}: ${formattedValue} (${percentage}%)`;
                       },
                     },
                   },
-                }}
-              />
-            </div>
-          )}
+                },
+              }}
+            />
+          </div>
 
-          {/* Conditional Rendering for Bar Chart */}
-          {Object.keys(filteredActiveAccountsByRaas).length > 0 && (
-            <div className="bar-chart">
-              <h3>Active Accounts by RaaS Providers</h3>
-              <Bar
-                data={barData}
-                options={{
-                  responsive: true,
-                  plugins: {
-                    legend: {
-                      display: false,
-                    },
-                    tooltip: {
-                      callbacks: {
-                        label: function (context) {
-                          return abbreviateNumber(context.raw);
-                        },
+          <div className="bar-chart">
+            <h3>Transaction Count by RaaS Providers</h3>
+            <Bar
+              data={barData}
+              options={{
+                responsive: true,
+                plugins: {
+                  legend: {
+                    display: false,
+                  },
+                  tooltip: {
+                    callbacks: {
+                      label: function (context) {
+                        return abbreviateNumber(context.raw);
                       },
                     },
                   },
-                  scales: {
-                    x: {
-                      ticks: {
-                        color: "#FFFFFF",
-                      },
+                },
+                scales: {
+                  x: {
+                    ticks: {
+                      color: "#FFFFFF",
                     },
-                    y: {
-                      beginAtZero: true,
-                      ticks: {
-                        color: "#FFFFFF",
-                        callback: function (value) {
-                          return abbreviateNumber(value);
-                        },
+                  },
+                  y: {
+                    beginAtZero: true,
+                    ticks: {
+                      color: "#FFFFFF",
+                      callback: function (value) {
+                        return abbreviateNumber(value);
                       },
                     },
                   },
-                }}
-              />
-            </div>
-          )}
+                },
+              }}
+            />
+          </div>
         </div>
       </div>
     </div>
   );
 };
 
-export default ActiveAccountsPage;
+export default DailyTransactionsPage;

@@ -1,10 +1,8 @@
-// TpssPage.js
-
 import React, { useState, useEffect } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faTachometerAlt } from "@fortawesome/free-solid-svg-icons"; // Updated icon
-import "./abc.css";
+import { faTachometerAlt } from "@fortawesome/free-solid-svg-icons";
+import "./ActiveAccountsPage.css";
 import { Line } from "react-chartjs-2";
 import {
   Chart as ChartJS,
@@ -22,7 +20,7 @@ import {
   fetchGoogleSheetData,
   fetchAllTpsData,
 } from "../services/googleTPSService";
-import { saveData, getData } from "../services/indexedDBService";
+import { saveData, getData, clearAllData } from "../services/indexedDBService";
 import moment from "moment";
 
 ChartJS.register(
@@ -48,52 +46,54 @@ const TpssPage = () => {
   const [timeRange, setTimeRange] = useState("Monthly");
   const [lastUpdated, setLastUpdated] = useState(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
+  const fetchData = async (forceRefresh = false) => {
+    setLoading(true);
+    try {
+      const storedData = await getData("tpsData");
+      const now = Date.now();
+      let newData;
 
-      try {
-        // Check if data is in IndexedDB and if it's less than 6 hours old
-        const storedData = await getData("tpsData");
-        const now = Date.now();
-        if (storedData && now - storedData.timestamp < 6 * 60 * 60 * 1000) {
-          // Use cached data
-          setGelatoChains(storedData.data.gelatoChains);
-          setTpsData(storedData.data.tpsData);
-          setLastUpdated(new Date(storedData.timestamp));
-          populateChartData(storedData.data.tpsData);
-        } else {
-          // Fetch new data
-          const sheetData = await fetchGoogleSheetData();
-          const allTpsData = await fetchAllTpsData(sheetData);
-
-          const gelatoChainsData = sheetData.filter(
-            (chain) => chain.raas.toLowerCase() === "gelato"
-          );
-
-          // Save to IndexedDB
-          await saveData("tpsData", {
-            gelatoChains: gelatoChainsData,
-            tpsData: allTpsData,
-          });
-          setLastUpdated(new Date());
-          setGelatoChains(gelatoChainsData);
-          setTpsData(allTpsData);
-          populateChartData(allTpsData);
-        }
-      } catch (error) {
-        console.error("Error during data fetching:", error);
-        setError("Failed to load data. Please try again later.");
-      } finally {
-        setLoading(false);
+      if (
+        storedData &&
+        now - storedData.timestamp < 6 * 60 * 60 * 1000 &&
+        !forceRefresh
+      ) {
+        newData = storedData.data;
+        setLastUpdated(new Date(storedData.timestamp));
+      } else {
+        const sheetData = await fetchGoogleSheetData();
+        newData = {
+          gelatoChains: sheetData.filter(
+            (chain) => chain.raas && chain.raas.toLowerCase() === "gelato"
+          ),
+          tpsData: await fetchAllTpsData(sheetData),
+        };
+        await saveData("tpsData", newData);
+        setLastUpdated(new Date());
       }
-    };
 
+      setGelatoChains(newData.gelatoChains);
+      setTpsData(newData.tpsData);
+      populateChartData(newData.tpsData);
+    } catch (error) {
+      console.error("Error during data fetching:", error);
+      setError("Failed to load data. Please try again later.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
     fetchData();
   }, [timeRange]);
 
   const handleTimeRangeChange = (range) => {
     setTimeRange(range);
+  };
+
+  const handleRefreshData = async () => {
+    await clearAllData();
+    fetchData(true);
   };
 
   const filterDataByTimeRange = (data, applyToChart = true) => {
@@ -102,7 +102,7 @@ const TpssPage = () => {
 
     switch (timeRange) {
       case "Daily":
-        startDate = now.clone().startOf("day"); // Start of today
+        startDate = now.clone().startOf("day");
         break;
       case "Monthly":
         startDate = now.clone().subtract(1, "month");
@@ -115,12 +115,11 @@ const TpssPage = () => {
         break;
       case "All":
       default:
-        startDate = moment(0); // Epoch time
+        startDate = moment(0);
     }
 
     if (timeRange === "Daily" && !applyToChart) {
-      // For the chart, show all data when "Daily" is selected
-      startDate = moment(0); // Epoch time
+      startDate = moment(0);
     }
 
     return data.filter((item) =>
@@ -129,10 +128,9 @@ const TpssPage = () => {
   };
 
   const populateChartData = (allTpsData) => {
-    // Calculate average TPS for each chain
     const chainAverages = Object.entries(allTpsData).map(
       ([chainName, tpsArray]) => {
-        const filteredData = filterDataByTimeRange(tpsArray, false); // Do not apply time range filter when "Daily" is selected
+        const filteredData = filterDataByTimeRange(tpsArray, false);
         const averageTps =
           filteredData.reduce((sum, item) => sum + item.tps, 0) /
             filteredData.length || 0;
@@ -140,7 +138,6 @@ const TpssPage = () => {
       }
     );
 
-    // Sort chains by average TPS in descending order and get top 10
     const topChains = chainAverages
       .sort((a, b) => b.averageTps - a.averageTps)
       .slice(0, 10)
@@ -151,8 +148,7 @@ const TpssPage = () => {
 
     topChains.forEach((chainName) => {
       const tpsArray = allTpsData[chainName];
-      // Filter data based on selected time range
-      const filteredData = filterDataByTimeRange(tpsArray, false); // For chart, apply special time range logic
+      const filteredData = filterDataByTimeRange(tpsArray, false);
       const data = filteredData.map((item) => ({
         x: new Date(item.timestamp * 1000),
         y: item.tps,
@@ -203,7 +199,6 @@ const TpssPage = () => {
       suffixIndex++;
     }
 
-    // For numbers less than 1, show up to 4 decimal places
     if (shortNumber < 1) {
       return (sign * absNum).toFixed(4);
     }
@@ -231,6 +226,9 @@ const TpssPage = () => {
               Last updated: {moment(lastUpdated).format("YYYY-MM-DD HH:mm")}
             </p>
           )}
+          <button className="refresh-button" onClick={handleRefreshData}>
+            Refresh Data
+          </button>
         </div>
 
         {error && <div className="error-message">{error}</div>}
@@ -274,47 +272,35 @@ const TpssPage = () => {
 
         <div className="table-chart-container">
           <div className="chain-list">
-            <div className="table-header">
-              <span className="chain-name-header">Chain</span>
-              <span className="daily-tps-header">Current TPS</span>
-              <span className="max-tps-header">Max TPS</span>
-              <span className="vertical-header">Vertical</span>
-            </div>
-            {gelatoChains.map((chain, index) => {
-              const chainTpsData = tpsData[chain.name] || [];
-              // Filter data based on selected time range
-              const filteredData = filterDataByTimeRange(chainTpsData);
-              const dailyTps =
-                filteredData.length > 0
-                  ? filteredData[filteredData.length - 1]?.tps || 0
-                  : 0;
-              const maxTps =
-                filteredData.length > 0
-                  ? Math.max(...filteredData.map((data) => data.tps || 0), 0)
-                  : 0;
-
-              return (
-                <div key={index} className="chain-item">
-                  <img
-                    src={`https://s2.googleusercontent.com/s2/favicons?domain=${chain.blockScoutUrl}&sz=32`}
-                    alt={`${chain.name} Logo`}
-                    className="chain-logo"
-                    onError={(e) => {
-                      e.target.onerror = null;
-                      e.target.src = "/path/to/placeholder/image.png";
-                    }}
-                  />
-                  <span className="chain-name">{chain.name}</span>
-                  <span className="daily-tps">
-                    {abbreviateNumber(dailyTps)} TPS
-                  </span>
-                  <span className="max-tps">
-                    {abbreviateNumber(maxTps)} TPS
-                  </span>
-                  <span className="vertical">{chain.vertical || "N/A"}</span>
-                </div>
-              );
-            })}
+            <table>
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Chain</th>
+                  <th>Current TPS</th>
+                  <th>Max TPS</th>
+                  <th>Vertical</th>
+                </tr>
+              </thead>
+              <tbody>
+                {gelatoChains.length > 0 ? (
+                  gelatoChains.map((chain) => (
+                    <TableRow
+                      key={chain.id}
+                      chain={chain}
+                      tpsData={tpsData}
+                      abbreviateNumber={abbreviateNumber}
+                    />
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={5} style={{ textAlign: "center" }}>
+                      No data available.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
 
           <div className="line-chart">
@@ -382,6 +368,7 @@ const TpssPage = () => {
                   },
                 },
               }}
+              height={100}
             />
           </div>
         </div>
@@ -389,5 +376,37 @@ const TpssPage = () => {
     </div>
   );
 };
+
+const TableRow = React.memo(({ chain, tpsData, abbreviateNumber }) => {
+  const chainTpsData = tpsData[chain.name] || [];
+  const latestTps =
+    chainTpsData.length > 0
+      ? chainTpsData[chainTpsData.length - 1]?.tps || 0
+      : 0;
+  const maxTps =
+    chainTpsData.length > 0
+      ? Math.max(...chainTpsData.map((data) => data.tps || 0), 0)
+      : 0;
+
+  return (
+    <tr key={chain.id}>
+      <td>
+        <img
+          src={`https://s2.googleusercontent.com/s2/favicons?domain=${chain.blockScoutUrl}&sz=32`}
+          alt={`${chain.name} Logo`}
+          className="chain-logo"
+          onError={(e) => {
+            e.target.onerror = null;
+            e.target.src = "/path/to/placeholder/image.png"; // Use a valid placeholder image path
+          }}
+        />
+      </td>
+      <td>{chain.name}</td>
+      <td>{abbreviateNumber(latestTps)} TPS</td>
+      <td>{abbreviateNumber(maxTps)} TPS</td>
+      <td>{chain.vertical || "N/A"}</td>
+    </tr>
+  );
+});
 
 export default TpssPage;

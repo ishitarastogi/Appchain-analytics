@@ -41,14 +41,10 @@ const ActiveAccountsPage = () => {
   const [timeRange, setTimeRange] = useState("Monthly");
   const [gelatoChains, setGelatoChains] = useState([]);
   const [allChains, setAllChains] = useState([]);
-  const [activeAccountsByChain, setActiveAccountsByChain] = useState({});
   const [activeAccountsByChainDate, setActiveAccountsByChainDate] = useState(
     {}
   );
-  const [chartData, setChartData] = useState({
-    labels: [],
-    datasets: [],
-  });
+  const [chartData, setChartData] = useState({ labels: [], datasets: [] });
   const [topChains, setTopChains] = useState([]);
   const [totalActiveAccountsByChain, setTotalActiveAccountsByChain] = useState(
     {}
@@ -65,7 +61,6 @@ const ActiveAccountsPage = () => {
 
         setGelatoChains(gelatoData);
         setAllChains(sheetData);
-        setActiveAccountsByChain(activeAccountsData.activeAccountsByChain);
         setActiveAccountsByChainDate(
           activeAccountsData.activeAccountsByChainDate
         );
@@ -92,7 +87,7 @@ const ActiveAccountsPage = () => {
   const populateStateWithData = (dates, activeAccountsData) => {
     const chainTotals = allChains.map((chain) => {
       const activeCounts = dates.map(
-        (date) => activeAccountsByChainDate[chain.name]?.[date] || 0 // Use optional chaining
+        (date) => activeAccountsByChainDate[chain.name]?.[date] || 0 // Provide a fallback to 0
       );
       const total = activeCounts.reduce((acc, val) => acc + val, 0);
       return { name: chain.name, total };
@@ -117,7 +112,7 @@ const ActiveAccountsPage = () => {
           .filter((date) => moment(date).format("YYYY-MM") === monthKey)
           .reduce(
             (sum, date) =>
-              sum + (activeAccountsByChainDate[chainName][date] || 0),
+              sum + (activeAccountsByChainDate[chainName]?.[date] || 0),
             0
           );
       });
@@ -132,15 +127,13 @@ const ActiveAccountsPage = () => {
       tension: 0.1,
     }));
 
-    setChartData({
-      labels,
-      datasets,
-    });
+    setChartData({ labels, datasets });
   };
 
   const getFilteredDates = () => {
     const today = moment().format("YYYY-MM-DD");
     let startDate;
+
     switch (timeRange) {
       case "Daily":
         startDate = today;
@@ -201,6 +194,7 @@ const ActiveAccountsPage = () => {
       Arenaz: "#FFCE56",
       "Edu Chain": "#4BC0C0",
       Caldera: "#EC6731",
+      Lisk: "#FFA500", // Example color for Lisk
     };
     return colorMap[chainName] || getRandomColor();
   };
@@ -318,7 +312,7 @@ const ActiveAccountsPage = () => {
           <div className="chain-list">
             {gelatoChains.map((chain, index) => {
               const activeCounts = filteredDates.map(
-                (date) => activeAccountsByChainDate[chain.name]?.[date] || 0 // Use optional chaining
+                (date) => activeAccountsByChainDate[chain.name]?.[date] || 0 // Provide a fallback to 0
               );
               const activeCount = activeCounts.reduce(
                 (acc, val) => acc + val,
@@ -362,7 +356,7 @@ const ActiveAccountsPage = () => {
                   },
                   title: {
                     display: true,
-                    text: `Active Accounts - Last 6 Months`,
+                    text: "Active Accounts - Last 6 Months",
                     color: "#FFFFFF",
                   },
                   tooltip: {

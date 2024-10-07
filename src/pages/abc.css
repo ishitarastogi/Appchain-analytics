@@ -27,6 +27,19 @@
 
 .transactions-header {
   margin-top: 20px;
+  position: relative;
+}
+
+.refresh-button {
+  position: absolute;
+  right: 35px;
+  top: 20px;
+  background-color: #ff3b57;
+  color: #fff;
+  border: none;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 5px;
 }
 
 .heading-container {
@@ -94,7 +107,7 @@
 
 .chain-list {
   flex-basis: 45%;
-  max-height: 500px;
+  max-height: 600px;
   overflow-y: auto;
 }
 
