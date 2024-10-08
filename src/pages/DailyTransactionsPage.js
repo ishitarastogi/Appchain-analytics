@@ -144,6 +144,9 @@ const DailyTransactionsPage = () => {
   const populateStateWithData = (data) => {
     const { sheetData, transactionsData } = data;
 
+    console.log("Sheet Data:", sheetData);
+    console.log("Transactions Data:", transactionsData);
+
     setAllChains(sheetData);
     setTransactionsByChainDate(transactionsData.transactionsByChainDate);
 
@@ -347,6 +350,13 @@ const DailyTransactionsPage = () => {
   };
 
   const updateTableData = () => {
+    console.log("Updating table data with current state:", {
+      allChains,
+      transactionsByChainDate,
+      selectedRaas,
+      sortConfig,
+    });
+
     const today = moment().format("YYYY-MM-DD");
     const yesterday = moment().subtract(1, "day").format("YYYY-MM-DD");
 
@@ -428,12 +438,12 @@ const DailyTransactionsPage = () => {
           : 0;
 
       tableData.push({
-        chainName,
-        chainLogo,
-        chainVertical,
-        dailyTransactions,
-        percentageIncrease7d,
-        percentageIncrease30d,
+        chainName: chainName || "Unknown",
+        chainLogo: chainLogo || "", // Provide a default logo or leave empty
+        chainVertical: chainVertical || "N/A",
+        dailyTransactions: dailyTransactions || 0,
+        percentageIncrease7d: percentageIncrease7d || 0,
+        percentageIncrease30d: percentageIncrease30d || 0,
       });
     });
 
@@ -453,6 +463,7 @@ const DailyTransactionsPage = () => {
     // Take top 10 chains
     const top10TableData = tableData.slice(0, 10);
 
+    console.log("Final Table Data:", top10TableData);
     setTableData(top10TableData);
   };
 
@@ -500,6 +511,10 @@ const DailyTransactionsPage = () => {
       Arenaz: "#FFCE56",
       "Edu Chain": "#4BC0C0",
       Caldera: "#EC6731",
+      Alchemy: "#4185F4",
+      Gelato: "#ff3b57",
+      Conduit: "#46BDC6",
+      Altlayer: "#B28AFE",
       Other: "#999999", // Color for 'Other' slice
     };
     return colorMap[chainName] || getRandomColor();
@@ -861,7 +876,7 @@ const DailyTransactionsPage = () => {
         )}
 
         {/* Table Section */}
-        {!loading && (
+        {!loading && !error && (
           <div className="table-container">
             <table>
               <thead>
@@ -877,7 +892,7 @@ const DailyTransactionsPage = () => {
                           <FontAwesomeIcon icon={faSortDown} />
                         )
                       ) : (
-                        <FontAwesomeIcon icon={faSortUp} />
+                        <FontAwesomeIcon icon={faSortDown} />
                       )}
                     </button>
                   </th>
@@ -940,42 +955,58 @@ const DailyTransactionsPage = () => {
                 </tr>
               </thead>
               <tbody>
-                {tableData.map((chain) => (
-                  <tr key={chain.chainName}>
-                    <td>
-                      {chain.chainLogo ? (
-                        <img
-                          src={chain.chainLogo}
-                          alt={chain.chainName}
-                          className="chain-logo"
-                        />
-                      ) : (
-                        "No Logo"
-                      )}
-                    </td>
-                    <td>{chain.chainName}</td>
-                    <td>{formatNumber(chain.dailyTransactions)}</td>
-                    <td>{chain.chainVertical}</td>
+                {tableData.length > 0 ? (
+                  tableData.map((chain) => (
+                    <tr key={chain.chainName}>
+                      <td>
+                        {chain.chainLogo ? (
+                          <img
+                            src={chain.chainLogo}
+                            alt={chain.chainName}
+                            className="chain-logo"
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src =
+                                "https://via.placeholder.com/40?text=No+Logo";
+                            }}
+                          />
+                        ) : (
+                          "No Logo"
+                        )}
+                      </td>
+                      <td>{chain.chainName}</td>
+                      <td>{formatNumber(chain.dailyTransactions)}</td>
+                      <td>{chain.chainVertical}</td>
+                      <td
+                        className={
+                          chain.percentageIncrease7d >= 0
+                            ? "positive"
+                            : "negative"
+                        }
+                      >
+                        {chain.percentageIncrease7d.toFixed(2)}%
+                      </td>
+                      <td
+                        className={
+                          chain.percentageIncrease30d >= 0
+                            ? "positive"
+                            : "negative"
+                        }
+                      >
+                        {chain.percentageIncrease30d.toFixed(2)}%
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
                     <td
-                      className={
-                        chain.percentageIncrease7d >= 0
-                          ? "positive"
-                          : "negative"
-                      }
+                      colSpan="6"
+                      style={{ textAlign: "center", color: "#cccccc" }}
                     >
-                      {chain.percentageIncrease7d.toFixed(2)}%
-                    </td>
-                    <td
-                      className={
-                        chain.percentageIncrease30d >= 0
-                          ? "positive"
-                          : "negative"
-                      }
-                    >
-                      {chain.percentageIncrease30d.toFixed(2)}%
+                      No data available.
                     </td>
                   </tr>
-                ))}
+                )}
               </tbody>
             </table>
           </div>
