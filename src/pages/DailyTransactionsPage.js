@@ -1,3 +1,5 @@
+// src/pages/DailyTransactionsPage.js
+
 import React, { useState, useEffect } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -13,13 +15,14 @@ import {
   Tooltip,
   Legend,
   Filler,
+  ArcElement, // For Pie Chart
 } from "chart.js";
-import { Line } from "react-chartjs-2";
+import { Line, Pie } from "react-chartjs-2";
 import {
   fetchGoogleSheetData,
   fetchAllTransactions,
 } from "../services/googleSheetService";
-import { abbreviateNumber } from "../utils/numberFormatter";
+import { abbreviateNumber, formatNumber } from "../utils/numberFormatter";
 import moment from "moment";
 import { saveData, getData } from "../services/indexedDBService"; // Import IndexedDB functions
 
@@ -32,12 +35,14 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-  Filler
+  Filler,
+  ArcElement // For Pie Chart
 );
 
 const DAILY_DATA_ID = "dailyTransactionData"; // Unique ID for IndexedDB
 
 const DailyTransactionsPage = () => {
+  // State variables
   const [currency, setCurrency] = useState("ETH");
   const [timeUnit, setTimeUnit] = useState("Daily"); // "Daily" or "Monthly"
   const [timeRange, setTimeRange] = useState("90 days");
@@ -48,6 +53,7 @@ const DailyTransactionsPage = () => {
   const [chartData, setChartData] = useState(null);
   const [chartDates, setChartDates] = useState([]); // State variable for dates
   const [topChains, setTopChains] = useState([]);
+  const [transactionsByRaas, setTransactionsByRaas] = useState({}); // New state for RaaS transactions
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true); // Loading state
   const SIX_HOURS_IN_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
@@ -118,6 +124,27 @@ const DailyTransactionsPage = () => {
 
     setAllChains(sheetData);
     setTransactionsByChainDate(transactionsData.transactionsByChainDate);
+
+    // Calculate transactions by RaaS
+    const raasTransactions = {};
+    sheetData.forEach((chain) => {
+      const { raas, name } = chain;
+      const chainTransactions = transactionsData.transactionsByChainDate[name];
+
+      if (chainTransactions) {
+        const totalChainTransactions = Object.values(chainTransactions).reduce(
+          (acc, val) => acc + val,
+          0
+        );
+
+        if (!raasTransactions[raas]) {
+          raasTransactions[raas] = 0;
+        }
+        raasTransactions[raas] += totalChainTransactions;
+      }
+    });
+
+    setTransactionsByRaas(raasTransactions);
   };
 
   const updateChartData = () => {
@@ -295,24 +322,22 @@ const DailyTransactionsPage = () => {
     return monthlyData;
   };
 
-  // Function to handle the RaaS selection
+  // Event Handlers
+
   const handleRaasChange = (event) => {
     setSelectedRaas(event.target.value);
   };
 
-  // Function to handle the time unit change
   const handleTimeUnitChange = (unit) => {
     setTimeUnit(unit);
     // Update timeRange to default option when time unit changes
     setTimeRange(timeRangeOptions[unit][0]);
   };
 
-  // Function to handle the time range selection
   const handleTimeRangeChange = (range) => {
     setTimeRange(range);
   };
 
-  // Function to handle chart type change
   const handleChartTypeChange = (type) => {
     setChartType(type);
   };
@@ -346,8 +371,18 @@ const DailyTransactionsPage = () => {
     return color;
   };
 
-  // Calculate percentage share of top chains
-  const totalTransactions = topChains.reduce((sum, chainName) => {
+  // Calculate total transactions of all chains
+  const totalTransactionsAllChains = Object.values(
+    transactionsByChainDate
+  ).reduce(
+    (sum, chainData) =>
+      sum +
+      Object.values(chainData).reduce((chainSum, val) => chainSum + val, 0),
+    0
+  );
+
+  // Calculate total transactions for the top 10 chains
+  const totalTransactionsTopChains = topChains.reduce((sum, chainName) => {
     return (
       sum +
       (transactionsByChainDate[chainName]
@@ -359,18 +394,34 @@ const DailyTransactionsPage = () => {
     );
   }, 0);
 
-  const totalTransactionsAllChains = Object.values(
-    transactionsByChainDate
-  ).reduce(
-    (sum, chainData) =>
-      sum +
-      Object.values(chainData).reduce((chainSum, val) => chainSum + val, 0),
-    0
+  // Format total transactions
+  const formattedTotalTransactions = formatNumber(
+    totalTransactionsAllChains,
+    2
   );
 
+  // Calculate percentage share
   const percentageShare = totalTransactionsAllChains
-    ? ((totalTransactions / totalTransactionsAllChains) * 100).toFixed(2)
+    ? ((totalTransactionsTopChains / totalTransactionsAllChains) * 100).toFixed(
+        2
+      )
     : 0;
+
+  // Data for RaaS Pie Chart
+  const raasLabels = Object.keys(transactionsByRaas);
+  const raasData = Object.values(transactionsByRaas);
+  const raasColors = raasLabels.map((raas) => getRandomColor());
+
+  const raasPieData = {
+    labels: raasLabels,
+    datasets: [
+      {
+        data: raasData,
+        backgroundColor: raasColors,
+        hoverBackgroundColor: raasColors,
+      },
+    ],
+  };
 
   return (
     <div className="daily-transactions-page">
@@ -440,24 +491,24 @@ const DailyTransactionsPage = () => {
 
             {/* Chart Type Selector */}
             <div className="chart-type-selector">
-              <button
+              <span
                 className={chartType === "absolute" ? "active" : ""}
                 onClick={() => handleChartTypeChange("absolute")}
               >
                 Absolute
-              </button>
-              <button
+              </span>
+              <span
                 className={chartType === "stacked" ? "active" : ""}
                 onClick={() => handleChartTypeChange("stacked")}
               >
                 Stacked
-              </button>
-              <button
+              </span>
+              <span
                 className={chartType === "percentage" ? "active" : ""}
                 onClick={() => handleChartTypeChange("percentage")}
               >
                 Percentage
-              </button>
+              </span>
             </div>
           </>
         )}
@@ -548,17 +599,49 @@ const DailyTransactionsPage = () => {
                         },
                       },
                     },
+                    elements: {
+                      point: {
+                        radius: 0, // Remove dots from the chart
+                      },
+                    },
                   }}
                 />
-                {/* Note below the chart */}
-                <p className="chart-note">
-                  The top chains represent {percentageShare}% of total
-                  transactions.
-                </p>
+                {/* Information Container Below the Chart */}
+                <div className="info-container">
+                  <p className="percentage-info">
+                    Until now, the total transactions happened by these 10
+                    chains are <strong>{percentageShare}%</strong> of total
+                    transactions of all the chains till now.
+                  </p>
+                  <div className="total-transactions-card">
+                    <h3>Total Transactions</h3>
+                    <p>{formattedTotalTransactions}</p>
+                  </div>
+                </div>
               </>
             ) : (
               <div className="chart-placeholder">No data available</div>
             )}
+          </div>
+        )}
+
+        {/* RaaS Pie Chart */}
+        {!loading && (
+          <div className="raas-pie-chart-container">
+            <h3>RaaS Providers' Share in Total Transactions</h3>
+            <Pie
+              data={raasPieData}
+              options={{
+                plugins: {
+                  legend: {
+                    position: "right",
+                    labels: {
+                      color: "#FFFFFF",
+                    },
+                  },
+                },
+              }}
+            />
           </div>
         )}
       </div>

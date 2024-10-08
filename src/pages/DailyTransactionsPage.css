@@ -96,46 +96,94 @@
   background-color: #333;
 }
 
+/* ... [existing CSS code] */
+
 /* Chart Type Selector */
 .chart-type-selector {
   display: flex;
   justify-content: center;
   margin: 10px 35px;
-  gap: 10px;
+  gap: 20px;
 }
 
-.chart-type-selector button {
+.chart-type-selector span {
+  color: #ffffff;
+  cursor: pointer;
+  font-size: 1rem;
+  position: relative;
+  padding-bottom: 5px;
+}
+
+.chart-type-selector span.active {
+  color: #ff3b57;
+}
+
+.chart-type-selector span.active::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background-color: #ff3b57;
+}
+
+/* Time Range Selector Buttons */
+.time-range-left button,
+.time-range-right button {
   background: transparent;
   color: #ffffff;
   border: 1px solid #ffffff;
   padding: 8px 12px;
   cursor: pointer;
   transition: background-color 0.3s, color 0.3s;
+  border-radius: 8px; /* Rounded corners */
 }
 
-.chart-type-selector button.active {
-  background-color: #ff3b57;
-  border: none;
+/* Info Container Below the Chart */
+.info-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 20px 35px;
+  padding: 15px;
+  border: 1px solid #ffffff;
+  border-radius: 8px;
 }
 
-.chart-type-selector button:hover {
-  background-color: #333;
+.percentage-info {
+  color: #ffffff;
+  font-size: 1rem;
+  flex: 1;
 }
 
-/* Line Chart Section */
-.line-chart-container {
+.total-transactions-card {
+  background-color: #1c1c1c;
+  padding: 15px;
+  border-radius: 8px;
+  text-align: center;
+  min-width: 200px;
+  border: 1px solid #ffffff;
+}
+
+.total-transactions-card h3 {
+  margin: 0;
+  margin-bottom: 10px;
+  color: #ff3b57;
+}
+
+.total-transactions-card p {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+/* RaaS Pie Chart Container */
+.raas-pie-chart-container {
   margin: 20px 35px;
 }
 
-.line-chart-container .chart-note {
-  margin-top: 10px;
-  color: #cccccc;
+.raas-pie-chart-container h3 {
+  color: #ffffff;
   text-align: center;
-}
-
-/* Chart Placeholder */
-.chart-placeholder {
-  color: #cccccc;
-  text-align: center;
-  padding: 50px;
+  margin-bottom: 20px;
 }
