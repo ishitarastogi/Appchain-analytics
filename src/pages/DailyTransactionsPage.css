@@ -2,22 +2,11 @@
 
 .daily-transactions-page {
   display: flex;
-  background-color: #121212; /* Slightly lighter black for better contrast */
+  background-color: #000; /* Black background */
   color: #ffffff; /* White text color for better contrast */
-  min-height: 100vh; /* Changed from height to min-height for flexibility */
+  height: 100vh; /* Full screen height */
   overflow: hidden;
   padding: 20px; /* Add some padding to the whole page */
-}
-
-/* Sidebar */
-.sidebar {
-  width: 240px; /* Sidebar width */
-  position: fixed; /* Keep sidebar fixed */
-  left: 0;
-  top: 0;
-  height: 100vh; /* Full height for sidebar */
-  overflow-y: auto; /* Scroll if content overflows */
-  background-color: #1c1c1c; /* Dark background for sidebar */
 }
 
 /* Main content */
@@ -28,14 +17,13 @@
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  max-height: 900vh; /* Allow content to scroll within the viewport */
 }
 
 /* Transactions Header */
 .transactions-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start; /* Align items to the top */
   margin-top: 20px; /* Increased spacing to make it more visually appealing */
 }
 
@@ -45,27 +33,35 @@
 }
 
 .heading-container .icon {
-  font-size: 1.8rem;
-  margin-right: 10px;
+  font-size: 2rem; /* Adjusted font size to match heading */
+  margin-left: 20px;
+  margin-bottom: 30px;
+  line-height: 1; /* Ensure consistent line height */
 }
 
 .heading-container h2 {
+  margin-left: 10px;
+
   font-size: 2rem;
+  line-height: 1; /* Ensure consistent line height */
 }
 
 .transactions-header .description {
   margin-top: -5px;
   font-size: 1rem;
   color: #cccccc;
+  margin-right: 23px;
 }
 
 .raas-dropdown select {
   background-color: #1c1c1c;
   color: #ffffff;
-  border: 1px solid #f5f5f5; /* Updated to light white */
-  padding: 8px 12px;
+  border: 1px solid #ffffff;
+  padding: 8px 22px;
   border-radius: 5px;
   cursor: pointer;
+  margin-right: 40px;
+  margin-top: 40px; /* Increased spacing to make it more visually appealing */
 }
 
 /* Time Range Selector */
@@ -85,7 +81,7 @@
 .time-range-right button {
   background: transparent;
   color: #ffffff;
-  border: 1px solid #f5f5f5; /* Updated to light white */
+  border: 1px solid #ffffff;
   padding: 8px 12px;
   cursor: pointer;
   transition: background-color 0.3s, color 0.3s;
@@ -96,12 +92,11 @@
 .time-range-right button.active {
   background-color: #ff3b57;
   border: none;
-  color: #ffffff;
 }
 
 .time-range-left button:hover,
 .time-range-right button:hover {
-  background-color: #333333; /* Darker background on hover */
+  background-color: #333;
 }
 
 /* Chart Type Selector */
@@ -137,10 +132,12 @@
 /* Line Chart Container */
 .line-chart-container {
   margin: 20px 35px;
-  background-color: #1c1c1c;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.line-chart-container .chart-note {
+  margin-top: 10px;
+  color: #cccccc;
+  text-align: center;
 }
 
 /* Info Container Below the Chart */
@@ -163,7 +160,7 @@
 }
 
 .percentage-info strong {
-  color: #ff3b57; /* Vibrant Pink-Red for percentage */
+  color: #ff3b57; /* Vibrant Pink-Red highlight for percentage */
 }
 
 .total-transactions-card {
@@ -189,57 +186,27 @@
   color: #ffffff; /* White text for high contrast */
 }
 
-/* Pie Charts Container */
-.pie-charts-container {
-  display: flex;
-  justify-content: space-around;
+/* Table Section */
+.table-section {
   margin: 20px 35px;
-  gap: 20px;
 }
 
-.pie-chart {
-  width: 33%;
-  background-color: #1c1c1c;
-  padding: 15px;
-  border-radius: 8px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-}
-
-.pie-chart h3 {
+.section-title {
+  font-size: 1.5rem;
   color: #ffffff;
-  text-align: center;
   margin-bottom: 10px;
-}
-
-.pie-chart canvas {
-  max-width: 100%;
-  height: auto;
-}
-
-/* Chart Placeholder */
-.chart-placeholder {
-  color: #cccccc;
-  text-align: center;
-  padding: 50px;
 }
 
 /* Table Styles */
 .table-container {
-  max-height: 500vh;
-  margin: 20px 35px;
   overflow-x: auto;
-  background-color: #1c1c1c; /* Ensure background contrasts with table */
-  padding: 10px;
-  border-radius: 8px;
-  border: 1px solid #f5f5f5; /* Light white border */
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
   background-color: #1c1c1c;
-  border: 1px solid #f5f5f5;
-  color: #ffffff;
+  border: 1px solid #ffffff;
 }
 
 th,
@@ -247,14 +214,12 @@ td {
   padding: 12px 15px;
   text-align: left;
   color: #ffffff;
-  border: 1px solid #f5f5f5; /* Light border for better visibility */
 }
 
 th {
   background-color: #2e2e2e;
   position: sticky;
   top: 0;
-  z-index: 1; /* Ensure headers stay on top */
 }
 
 th button {
@@ -269,15 +234,10 @@ tr:nth-child(even) {
   background-color: #2a2a2a;
 }
 
-tr:hover {
-  background-color: #333333; /* Slightly lighter on hover */
-}
-
 .chain-logo {
   width: 40px;
   height: 40px;
   object-fit: contain;
-  border-radius: 4px;
 }
 
 .positive {
@@ -288,37 +248,50 @@ tr:hover {
   color: #dc3545; /* Red for negative percentage */
 }
 
-/* Error Message */
-.error-message {
+/* Pie Charts Section */
+.pie-charts-section {
   margin: 20px 35px;
-  padding: 15px;
-  background-color: #ffdddd;
-  color: #a94442;
-  border: 1px solid #a94442;
-  border-radius: 8px;
 }
 
-/* Loading Indicator */
-.loading {
-  margin: 20px 35px;
+.pie-charts-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.pie-chart-card {
+  flex: 1 1 calc(20% - 20px);
+  background-color: #1c1c1c;
   padding: 15px;
-  background-color: #f5f5f5;
-  color: #333333;
-  border: 1px solid #cccccc;
   border-radius: 8px;
+  min-width: 300px;
+}
+
+.pie-chart-card h4 {
+  color: #ffffff;
   text-align: center;
+  margin-bottom: 10px;
+}
+
+.pie-chart-card canvas {
+  max-width: 100%;
+  height: auto;
 }
 
 /* Adjustments for small screens */
 @media (max-width: 768px) {
+  .main-content {
+    margin-left: 0;
+    width: 100%;
+  }
+
   .pie-charts-container {
     flex-direction: column;
     align-items: center;
   }
 
-  .pie-chart {
-    width: 80%;
-    margin-bottom: 20px;
+  .pie-chart-card {
+    width: 100%;
   }
 
   .info-container {
@@ -329,16 +302,5 @@ tr:hover {
   .total-transactions-card {
     margin-top: 15px;
     width: 100%;
-  }
-
-  .time-range-selector {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .chart-type-selector {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
   }
 }

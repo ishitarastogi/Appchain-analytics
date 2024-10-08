@@ -3,11 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faChartLine,
-  faSortUp,
-  faSortDown,
-} from "@fortawesome/free-solid-svg-icons";
+import { faChartLine, faSort } from "@fortawesome/free-solid-svg-icons";
 import "./DailyTransactionsPage.css";
 import {
   Chart as ChartJS,
@@ -60,10 +56,6 @@ const DailyTransactionsPage = () => {
   const [topChainsList, setTopChainsList] = useState([]); // Added state for topChainsList
   const [transactionsByRaas, setTransactionsByRaas] = useState({}); // New state for RaaS transactions
   const [tableData, setTableData] = useState([]); // State for table data
-  const [sortConfig, setSortConfig] = useState({
-    key: "dailyTransactions",
-    direction: "descending",
-  });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true); // Loading state
   const SIX_HOURS_IN_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
@@ -125,6 +117,7 @@ const DailyTransactionsPage = () => {
   useEffect(() => {
     if (allChains.length && Object.keys(transactionsByChainDate).length) {
       updateChartData();
+      updateTableData();
     }
   }, [
     allChains,
@@ -135,17 +128,8 @@ const DailyTransactionsPage = () => {
     chartType,
   ]);
 
-  useEffect(() => {
-    if (allChains.length && Object.keys(transactionsByChainDate).length) {
-      updateTableData();
-    }
-  }, [allChains, transactionsByChainDate, selectedRaas, sortConfig]);
-
   const populateStateWithData = (data) => {
     const { sheetData, transactionsData } = data;
-
-    console.log("Sheet Data:", sheetData);
-    console.log("Transactions Data:", transactionsData);
 
     setAllChains(sheetData);
     setTransactionsByChainDate(transactionsData.transactionsByChainDate);
@@ -350,13 +334,6 @@ const DailyTransactionsPage = () => {
   };
 
   const updateTableData = () => {
-    console.log("Updating table data with current state:", {
-      allChains,
-      transactionsByChainDate,
-      selectedRaas,
-      sortConfig,
-    });
-
     const today = moment().format("YYYY-MM-DD");
     const yesterday = moment().subtract(1, "day").format("YYYY-MM-DD");
 
@@ -389,7 +366,7 @@ const DailyTransactionsPage = () => {
     // For each chain, compute the required data
     filteredChains.forEach((chain) => {
       const chainName = chain.name;
-      const chainLogo = chain.logo;
+      const chainLogo = chain.logo || chain.logoUrl || ""; // Use logo or logoUrl
       const chainVertical = chain.vertical || "N/A";
 
       const chainTransactions = transactionsByChainDate[chainName] || {};
@@ -438,32 +415,21 @@ const DailyTransactionsPage = () => {
           : 0;
 
       tableData.push({
-        chainName: chainName || "Unknown",
-        chainLogo: chainLogo || "", // Provide a default logo or leave empty
-        chainVertical: chainVertical || "N/A",
-        dailyTransactions: dailyTransactions || 0,
-        percentageIncrease7d: percentageIncrease7d || 0,
-        percentageIncrease30d: percentageIncrease30d || 0,
+        chainName,
+        chainLogo,
+        chainVertical,
+        dailyTransactions,
+        percentageIncrease7d,
+        percentageIncrease30d,
       });
     });
 
-    // Apply sorting
-    if (sortConfig !== null) {
-      tableData.sort((a, b) => {
-        if (a[sortConfig.key] < b[sortConfig.key]) {
-          return sortConfig.direction === "ascending" ? -1 : 1;
-        }
-        if (a[sortConfig.key] > b[sortConfig.key]) {
-          return sortConfig.direction === "ascending" ? 1 : -1;
-        }
-        return 0;
-      });
-    }
+    // Sort only on dailyTransactions column
+    tableData.sort((a, b) => b.dailyTransactions - a.dailyTransactions);
 
     // Take top 10 chains
     const top10TableData = tableData.slice(0, 10);
 
-    console.log("Final Table Data:", top10TableData);
     setTableData(top10TableData);
   };
 
@@ -487,12 +453,9 @@ const DailyTransactionsPage = () => {
     setChartType(type);
   };
 
-  const handleSort = (key) => {
-    let direction = "ascending";
-    if (sortConfig.key === key && sortConfig.direction === "ascending") {
-      direction = "descending";
-    }
-    setSortConfig({ key, direction });
+  const handleSort = () => {
+    // Reverse the order of tableData
+    setTableData([...tableData.reverse()]);
   };
 
   // Utility functions
@@ -511,10 +474,6 @@ const DailyTransactionsPage = () => {
       Arenaz: "#FFCE56",
       "Edu Chain": "#4BC0C0",
       Caldera: "#EC6731",
-      Alchemy: "#4185F4",
-      Gelato: "#ff3b57",
-      Conduit: "#46BDC6",
-      Altlayer: "#B28AFE",
       Other: "#999999", // Color for 'Other' slice
     };
     return colorMap[chainName] || getRandomColor();
@@ -803,160 +762,29 @@ const DailyTransactionsPage = () => {
           </div>
         )}
 
-        {/* Pie Charts Section */}
-        {!loading && (
-          <div className="pie-charts-container">
-            {/* Top Chains Pie Chart */}
-            <div className="pie-chart">
-              <h3>Top 10 Chains Market Share</h3>
-              {topChainsData && (
-                <Pie
-                  data={topChainsPieData}
-                  options={{
-                    plugins: {
-                      legend: {
-                        position: "right",
-                        labels: {
-                          color: "#FFFFFF",
-                        },
-                      },
-                      tooltip: {
-                        callbacks: {
-                          label: function (context) {
-                            const label = context.label || "";
-                            const value = context.parsed || 0;
-                            const percentage = (
-                              (value / totalTransactionsAllChains) *
-                              100
-                            ).toFixed(2);
-                            const formattedValue = abbreviateNumber(value);
-                            return `${label}: ${formattedValue} (${percentage}%)`;
-                          },
-                        },
-                      },
-                    },
-                  }}
-                />
-              )}
-            </div>
-            {/* RaaS Pie Chart */}
-            <div className="pie-chart">
-              <h3>RaaS Providers Market Share</h3>
-              {raasData && (
-                <Pie
-                  data={raasPieData}
-                  options={{
-                    plugins: {
-                      legend: {
-                        position: "right",
-                        labels: {
-                          color: "#FFFFFF",
-                        },
-                      },
-                      tooltip: {
-                        callbacks: {
-                          label: function (context) {
-                            const label = context.label || "";
-                            const value = context.parsed || 0;
-                            const percentage = (
-                              (value / totalTransactionsAllChains) *
-                              100
-                            ).toFixed(2);
-                            const formattedValue = abbreviateNumber(value);
-                            return `${label}: ${formattedValue} (${percentage}%)`;
-                          },
-                        },
-                      },
-                    },
-                  }}
-                />
-              )}
-            </div>
-          </div>
-        )}
-
         {/* Table Section */}
-        {!loading && !error && (
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Logo</th>
-                  <th>
-                    Chain Name{" "}
-                    <button onClick={() => handleSort("chainName")}>
-                      {sortConfig.key === "chainName" ? (
-                        sortConfig.direction === "ascending" ? (
-                          <FontAwesomeIcon icon={faSortUp} />
-                        ) : (
-                          <FontAwesomeIcon icon={faSortDown} />
-                        )
-                      ) : (
-                        <FontAwesomeIcon icon={faSortDown} />
-                      )}
-                    </button>
-                  </th>
-                  <th>
-                    Daily Transactions{" "}
-                    <button onClick={() => handleSort("dailyTransactions")}>
-                      {sortConfig.key === "dailyTransactions" ? (
-                        sortConfig.direction === "ascending" ? (
-                          <FontAwesomeIcon icon={faSortUp} />
-                        ) : (
-                          <FontAwesomeIcon icon={faSortDown} />
-                        )
-                      ) : (
-                        <FontAwesomeIcon icon={faSortDown} />
-                      )}
-                    </button>
-                  </th>
-                  <th>
-                    Vertical{" "}
-                    <button onClick={() => handleSort("chainVertical")}>
-                      {sortConfig.key === "chainVertical" ? (
-                        sortConfig.direction === "ascending" ? (
-                          <FontAwesomeIcon icon={faSortUp} />
-                        ) : (
-                          <FontAwesomeIcon icon={faSortDown} />
-                        )
-                      ) : (
-                        <FontAwesomeIcon icon={faSortUp} />
-                      )}
-                    </button>
-                  </th>
-                  <th>
-                    7d{" "}
-                    <button onClick={() => handleSort("percentageIncrease7d")}>
-                      {sortConfig.key === "percentageIncrease7d" ? (
-                        sortConfig.direction === "ascending" ? (
-                          <FontAwesomeIcon icon={faSortUp} />
-                        ) : (
-                          <FontAwesomeIcon icon={faSortDown} />
-                        )
-                      ) : (
-                        <FontAwesomeIcon icon={faSortDown} />
-                      )}
-                    </button>
-                  </th>
-                  <th>
-                    30d{" "}
-                    <button onClick={() => handleSort("percentageIncrease30d")}>
-                      {sortConfig.key === "percentageIncrease30d" ? (
-                        sortConfig.direction === "ascending" ? (
-                          <FontAwesomeIcon icon={faSortUp} />
-                        ) : (
-                          <FontAwesomeIcon icon={faSortDown} />
-                        )
-                      ) : (
-                        <FontAwesomeIcon icon={faSortDown} />
-                      )}
-                    </button>
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {tableData.length > 0 ? (
-                  tableData.map((chain) => (
+        {!loading && (
+          <div className="table-section">
+            <h3 className="section-title">Top 10 Chains</h3>
+            <div className="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Logo</th>
+                    <th>Chain Name</th>
+                    <th>
+                      Daily Transactions{" "}
+                      <button onClick={handleSort}>
+                        <FontAwesomeIcon icon={faSort} />
+                      </button>
+                    </th>
+                    <th>Vertical</th>
+                    <th>7d %</th>
+                    <th>30d %</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tableData.map((chain) => (
                     <tr key={chain.chainName}>
                       <td>
                         {chain.chainLogo ? (
@@ -964,11 +792,6 @@ const DailyTransactionsPage = () => {
                             src={chain.chainLogo}
                             alt={chain.chainName}
                             className="chain-logo"
-                            onError={(e) => {
-                              e.target.onerror = null;
-                              e.target.src =
-                                "https://via.placeholder.com/40?text=No+Logo";
-                            }}
                           />
                         ) : (
                           "No Logo"
@@ -996,19 +819,85 @@ const DailyTransactionsPage = () => {
                         {chain.percentageIncrease30d.toFixed(2)}%
                       </td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td
-                      colSpan="6"
-                      style={{ textAlign: "center", color: "#cccccc" }}
-                    >
-                      No data available.
-                    </td>
-                  </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Pie Charts Section */}
+        {!loading && (
+          <div className="pie-charts-section">
+            <h3 className="section-title">Market Share</h3>
+            <div className="pie-charts-container">
+              {/* Top Chains Pie Chart */}
+              <div className="pie-chart-card">
+                <h4>Top 10 Chains Market Share</h4>
+                {topChainsData && (
+                  <Pie
+                    data={topChainsPieData}
+                    options={{
+                      plugins: {
+                        legend: {
+                          position: "right",
+                          labels: {
+                            color: "#FFFFFF",
+                          },
+                        },
+                        tooltip: {
+                          callbacks: {
+                            label: function (context) {
+                              const label = context.label || "";
+                              const value = context.parsed || 0;
+                              const percentage = (
+                                (value / totalTransactionsAllChains) *
+                                100
+                              ).toFixed(2);
+                              const formattedValue = abbreviateNumber(value);
+                              return `${label}: ${formattedValue} (${percentage}%)`;
+                            },
+                          },
+                        },
+                      },
+                    }}
+                  />
                 )}
-              </tbody>
-            </table>
+              </div>
+              {/* RaaS Pie Chart */}
+              <div className="pie-chart-card">
+                <h4>RaaS Providers Market Share</h4>
+                {raasData && (
+                  <Pie
+                    data={raasPieData}
+                    options={{
+                      plugins: {
+                        legend: {
+                          position: "right",
+                          labels: {
+                            color: "#FFFFFF",
+                          },
+                        },
+                        tooltip: {
+                          callbacks: {
+                            label: function (context) {
+                              const label = context.label || "";
+                              const value = context.parsed || 0;
+                              const percentage = (
+                                (value / totalTransactionsAllChains) *
+                                100
+                              ).toFixed(2);
+                              const formattedValue = abbreviateNumber(value);
+                              return `${label}: ${formattedValue} (${percentage}%)`;
+                            },
+                          },
+                        },
+                      },
+                    }}
+                  />
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
