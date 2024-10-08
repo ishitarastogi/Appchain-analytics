@@ -15,7 +15,7 @@ import {
   Tooltip,
   Legend,
   Filler,
-  ArcElement, // For Pie Chart
+  ArcElement,
 } from "chart.js";
 import { Line, Pie } from "react-chartjs-2";
 import {
@@ -24,7 +24,9 @@ import {
 } from "../services/googleSheetService";
 import { abbreviateNumber, formatNumber } from "../utils/numberFormatter";
 import moment from "moment";
-import { saveData, getData } from "../services/indexedDBService"; // Import IndexedDB functions
+import { saveData, getData } from "../services/indexedDBService";
+
+// Import the DataLabels plugin
 
 // Register required components for Chart.js
 ChartJS.register(
@@ -36,7 +38,7 @@ ChartJS.register(
   Tooltip,
   Legend,
   Filler,
-  ArcElement // For Pie Chart
+  ArcElement
 );
 
 const DAILY_DATA_ID = "dailyTransactionData"; // Unique ID for IndexedDB
@@ -53,6 +55,7 @@ const DailyTransactionsPage = () => {
   const [chartData, setChartData] = useState(null);
   const [chartDates, setChartDates] = useState([]); // State variable for dates
   const [topChains, setTopChains] = useState([]);
+  const [topChainsList, setTopChainsList] = useState([]); // Added state for topChainsList
   const [transactionsByRaas, setTransactionsByRaas] = useState({}); // New state for RaaS transactions
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true); // Loading state
@@ -184,12 +187,14 @@ const DailyTransactionsPage = () => {
     });
 
     chainTotals.sort((a, b) => b.total - a.total);
-    const topChains = chainTotals.slice(0, 10).map((chain) => chain.name);
-    setTopChains(topChains);
+    const topChainsList = chainTotals.slice(0, 10);
+    setTopChainsList(topChainsList); // Store topChainsList in state
+    const topChainsNames = topChainsList.map((chain) => chain.name);
+    setTopChains(topChainsNames);
 
     const totalTransactionsByDate = {};
 
-    topChains.forEach((chainName) => {
+    topChainsNames.forEach((chainName) => {
       const chainData = [];
       if (timeUnit === "Daily") {
         dates.forEach((date, idx) => {
@@ -358,6 +363,7 @@ const DailyTransactionsPage = () => {
       Arenaz: "#FFCE56",
       "Edu Chain": "#4BC0C0",
       Caldera: "#EC6731",
+      Other: "#999999", // Color for 'Other' slice
     };
     return colorMap[chainName] || getRandomColor();
   };
@@ -409,8 +415,17 @@ const DailyTransactionsPage = () => {
 
   // Data for RaaS Pie Chart
   const raasLabels = Object.keys(transactionsByRaas);
-  const raasData = Object.values(transactionsByRaas);
-  const raasColors = raasLabels.map((raas) => getRandomColor());
+  const raasData = raasLabels.map((raas) => transactionsByRaas[raas]);
+  const raasColors = raasLabels.map((raas) => {
+    const colorMap = {
+      Gelato: "#ff3b57",
+      Conduit: "#46BDC6",
+      Alchemy: "#4185F4",
+      Caldera: "#EC6731",
+      Altlayer: "#B28AFE",
+    };
+    return colorMap[raas] || getRandomColor();
+  });
 
   const raasPieData = {
     labels: raasLabels,
@@ -419,6 +434,30 @@ const DailyTransactionsPage = () => {
         data: raasData,
         backgroundColor: raasColors,
         hoverBackgroundColor: raasColors,
+      },
+    ],
+  };
+
+  // Data for Top Chains Pie Chart
+  // Include "Other" as the 11th slice
+  const otherChainsTotal =
+    totalTransactionsAllChains - totalTransactionsTopChains;
+  const topChainsData = topChainsList.map((chain) => chain.total);
+  const topChainsLabels = topChainsList.map((chain) => chain.name);
+  topChainsLabels.push("Other");
+  topChainsData.push(otherChainsTotal);
+
+  const topChainsPieData = {
+    labels: topChainsLabels,
+    datasets: [
+      {
+        data: topChainsData,
+        backgroundColor: topChainsLabels.map((label) =>
+          getColorForChain(label)
+        ),
+        hoverBackgroundColor: topChainsLabels.map((label) =>
+          getColorForChain(label)
+        ),
       },
     ],
   };
@@ -609,9 +648,9 @@ const DailyTransactionsPage = () => {
                 {/* Information Container Below the Chart */}
                 <div className="info-container">
                   <p className="percentage-info">
-                    Until now, the total transactions happened by these 10
-                    chains are <strong>{percentageShare}%</strong> of total
-                    transactions of all the chains till now.
+                    The top 10 chains contribute{" "}
+                    <strong>{percentageShare}%</strong> of all transactions so
+                    far.
                   </p>
                   <div className="total-transactions-card">
                     <h3>Total Transactions</h3>
@@ -625,23 +664,91 @@ const DailyTransactionsPage = () => {
           </div>
         )}
 
-        {/* RaaS Pie Chart */}
+        {/* Pie Charts Section */}
         {!loading && (
-          <div className="raas-pie-chart-container">
-            <h3>RaaS Providers' Share in Total Transactions</h3>
-            <Pie
-              data={raasPieData}
-              options={{
-                plugins: {
-                  legend: {
-                    position: "right",
-                    labels: {
-                      color: "#FFFFFF",
+          <div className="pie-charts-container">
+            {/* Top Chains Pie Chart */}
+            <div className="pie-chart">
+              <h3>Top 10 Chains Market Share</h3>
+              <Pie
+                data={topChainsPieData}
+                options={{
+                  plugins: {
+                    legend: {
+                      position: "right",
+                      labels: {
+                        color: "#FFFFFF",
+                      },
+                    },
+                    tooltip: {
+                      callbacks: {
+                        label: function (context) {
+                          const label = context.label || "";
+                          const value = context.parsed || 0;
+                          const percentage = (
+                            (value / totalTransactionsAllChains) *
+                            100
+                          ).toFixed(2);
+                          const formattedValue = abbreviateNumber(value);
+                          return `${label}: ${formattedValue} (${percentage}%)`;
+                        },
+                      },
+                    },
+                    datalabels: {
+                      color: "#fff",
+                      formatter: (value, context) => {
+                        const percentage = (
+                          (value / totalTransactionsAllChains) *
+                          100
+                        ).toFixed(2);
+                        return `${percentage}%`;
+                      },
                     },
                   },
-                },
-              }}
-            />
+                }}
+              />
+            </div>
+            {/* RaaS Pie Chart */}
+            <div className="pie-chart">
+              <h3>RaaS Providers Market Share</h3>
+              <Pie
+                data={raasPieData}
+                options={{
+                  plugins: {
+                    legend: {
+                      position: "right",
+                      labels: {
+                        color: "#FFFFFF",
+                      },
+                    },
+                    tooltip: {
+                      callbacks: {
+                        label: function (context) {
+                          const label = context.label || "";
+                          const value = context.parsed || 0;
+                          const percentage = (
+                            (value / totalTransactionsAllChains) *
+                            100
+                          ).toFixed(2);
+                          const formattedValue = abbreviateNumber(value);
+                          return `${label}: ${formattedValue} (${percentage}%)`;
+                        },
+                      },
+                    },
+                    datalabels: {
+                      color: "#fff",
+                      formatter: (value, context) => {
+                        const percentage = (
+                          (value / totalTransactionsAllChains) *
+                          100
+                        ).toFixed(2);
+                        return `${percentage}%`;
+                      },
+                    },
+                  },
+                }}
+              />
+            </div>
           </div>
         )}
       </div>
