@@ -3,7 +3,11 @@
 import React, { useState, useEffect } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChartLine } from "@fortawesome/free-solid-svg-icons";
+import {
+  faChartLine,
+  faSortUp,
+  faSortDown,
+} from "@fortawesome/free-solid-svg-icons";
 import "./DailyTransactionsPage.css";
 import {
   Chart as ChartJS,
@@ -25,8 +29,6 @@ import {
 import { abbreviateNumber, formatNumber } from "../utils/numberFormatter";
 import moment from "moment";
 import { saveData, getData } from "../services/indexedDBService";
-
-// Import the DataLabels plugin
 
 // Register required components for Chart.js
 ChartJS.register(
@@ -57,6 +59,11 @@ const DailyTransactionsPage = () => {
   const [topChains, setTopChains] = useState([]);
   const [topChainsList, setTopChainsList] = useState([]); // Added state for topChainsList
   const [transactionsByRaas, setTransactionsByRaas] = useState({}); // New state for RaaS transactions
+  const [tableData, setTableData] = useState([]); // State for table data
+  const [sortConfig, setSortConfig] = useState({
+    key: "dailyTransactions",
+    direction: "descending",
+  });
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true); // Loading state
   const SIX_HOURS_IN_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
@@ -119,8 +126,20 @@ const DailyTransactionsPage = () => {
     if (allChains.length && Object.keys(transactionsByChainDate).length) {
       updateChartData();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [timeUnit, timeRange, selectedRaas, chartType]);
+  }, [
+    allChains,
+    transactionsByChainDate,
+    timeUnit,
+    timeRange,
+    selectedRaas,
+    chartType,
+  ]);
+
+  useEffect(() => {
+    if (allChains.length && Object.keys(transactionsByChainDate).length) {
+      updateTableData();
+    }
+  }, [allChains, transactionsByChainDate, selectedRaas, sortConfig]);
 
   const populateStateWithData = (data) => {
     const { sheetData, transactionsData } = data;
@@ -327,6 +346,116 @@ const DailyTransactionsPage = () => {
     return monthlyData;
   };
 
+  const updateTableData = () => {
+    const today = moment().format("YYYY-MM-DD");
+    const yesterday = moment().subtract(1, "day").format("YYYY-MM-DD");
+
+    // Generate dates for last 60 days
+    const fullDates = [];
+    let currentDate = moment().subtract(60, "days");
+    while (currentDate.isSameOrBefore(today, "day")) {
+      fullDates.push(currentDate.format("YYYY-MM-DD"));
+      currentDate.add(1, "day");
+    }
+
+    const last7Days = fullDates.slice(-7); // Last 7 days
+    const previous7Days = fullDates.slice(-14, -7); // Previous 7 days
+
+    const last30Days = fullDates.slice(-30); // Last 30 days
+    const previous30Days = fullDates.slice(-60, -30); // Previous 30 days
+
+    const tableData = [];
+
+    // Get the filtered chains based on RaaS selection
+    const filteredChains =
+      selectedRaas === "RaaS"
+        ? allChains
+        : allChains.filter(
+            (chain) =>
+              chain.raas &&
+              chain.raas.toLowerCase() === selectedRaas.toLowerCase()
+          );
+
+    // For each chain, compute the required data
+    filteredChains.forEach((chain) => {
+      const chainName = chain.name;
+      const chainLogo = chain.logo;
+      const chainVertical = chain.vertical || "N/A";
+
+      const chainTransactions = transactionsByChainDate[chainName] || {};
+
+      // Daily transactions (transactions on yesterday)
+      const dailyTransactions = chainTransactions[yesterday] || 0;
+
+      // Sum transactions over last 7 days
+      const last7DaysTransactions = last7Days.reduce((sum, date) => {
+        return sum + (chainTransactions[date] || 0);
+      }, 0);
+
+      // Sum transactions over previous 7 days
+      const previous7DaysTransactions = previous7Days.reduce((sum, date) => {
+        return sum + (chainTransactions[date] || 0);
+      }, 0);
+
+      // Calculate 7d percentage increase
+      const percentageIncrease7d =
+        previous7DaysTransactions > 0
+          ? ((last7DaysTransactions - previous7DaysTransactions) /
+              previous7DaysTransactions) *
+            100
+          : last7DaysTransactions > 0
+          ? 100
+          : 0;
+
+      // Sum transactions over last 30 days
+      const last30DaysTransactions = last30Days.reduce((sum, date) => {
+        return sum + (chainTransactions[date] || 0);
+      }, 0);
+
+      // Sum transactions over previous 30 days
+      const previous30DaysTransactions = previous30Days.reduce((sum, date) => {
+        return sum + (chainTransactions[date] || 0);
+      }, 0);
+
+      // Calculate 30d percentage increase
+      const percentageIncrease30d =
+        previous30DaysTransactions > 0
+          ? ((last30DaysTransactions - previous30DaysTransactions) /
+              previous30DaysTransactions) *
+            100
+          : last30DaysTransactions > 0
+          ? 100
+          : 0;
+
+      tableData.push({
+        chainName,
+        chainLogo,
+        chainVertical,
+        dailyTransactions,
+        percentageIncrease7d,
+        percentageIncrease30d,
+      });
+    });
+
+    // Apply sorting
+    if (sortConfig !== null) {
+      tableData.sort((a, b) => {
+        if (a[sortConfig.key] < b[sortConfig.key]) {
+          return sortConfig.direction === "ascending" ? -1 : 1;
+        }
+        if (a[sortConfig.key] > b[sortConfig.key]) {
+          return sortConfig.direction === "ascending" ? 1 : -1;
+        }
+        return 0;
+      });
+    }
+
+    // Take top 10 chains
+    const top10TableData = tableData.slice(0, 10);
+
+    setTableData(top10TableData);
+  };
+
   // Event Handlers
 
   const handleRaasChange = (event) => {
@@ -345,6 +474,14 @@ const DailyTransactionsPage = () => {
 
   const handleChartTypeChange = (type) => {
     setChartType(type);
+  };
+
+  const handleSort = (key) => {
+    let direction = "ascending";
+    if (sortConfig.key === key && sortConfig.direction === "ascending") {
+      direction = "descending";
+    }
+    setSortConfig({ key, direction });
   };
 
   // Utility functions
@@ -378,26 +515,20 @@ const DailyTransactionsPage = () => {
   };
 
   // Calculate total transactions of all chains
-  const totalTransactionsAllChains = Object.values(
-    transactionsByChainDate
-  ).reduce(
-    (sum, chainData) =>
-      sum +
-      Object.values(chainData).reduce((chainSum, val) => chainSum + val, 0),
-    0
-  );
-
-  // Calculate total transactions for the top 10 chains
-  const totalTransactionsTopChains = topChains.reduce((sum, chainName) => {
+  const totalTransactionsAllChains = allChains.reduce((sum, chain) => {
+    const chainTransactions = transactionsByChainDate[chain.name] || {};
     return (
       sum +
-      (transactionsByChainDate[chainName]
-        ? Object.values(transactionsByChainDate[chainName]).reduce(
-            (acc, val) => acc + val,
-            0
-          )
-        : 0)
+      Object.values(chainTransactions).reduce(
+        (chainSum, val) => chainSum + val,
+        0
+      )
     );
+  }, 0);
+
+  // Calculate total transactions for the top 10 chains
+  const totalTransactionsTopChains = topChainsList.reduce((sum, chain) => {
+    return sum + chain.total;
   }, 0);
 
   // Format total transactions
@@ -553,114 +684,107 @@ const DailyTransactionsPage = () => {
         )}
 
         {/* Line Chart Section */}
-        {!loading && (
+        {!loading && chartData && (
           <div className="line-chart-container">
-            {chartData ? (
-              <>
-                <Line
-                  data={chartData}
-                  options={{
-                    responsive: true,
-                    interaction: {
-                      mode: "index",
-                      intersect: false,
+            <Line
+              data={chartData}
+              options={{
+                responsive: true,
+                interaction: {
+                  mode: "index",
+                  intersect: false,
+                },
+                plugins: {
+                  legend: {
+                    position: "bottom",
+                    labels: {
+                      color: "#FFFFFF",
                     },
-                    plugins: {
-                      legend: {
-                        position: "bottom",
-                        labels: {
-                          color: "#FFFFFF",
-                        },
+                  },
+                  title: {
+                    display: true,
+                    text: `Transactions - ${timeRange}`,
+                    color: "#FFFFFF",
+                  },
+                  tooltip: {
+                    mode: "index",
+                    intersect: false,
+                    callbacks: {
+                      title: function (context) {
+                        let dateLabel = context[0].label;
+                        return dateLabel;
                       },
-                      title: {
-                        display: true,
-                        text: `Transactions - ${timeRange}`,
-                        color: "#FFFFFF",
-                      },
-                      tooltip: {
-                        mode: "index",
-                        intersect: false,
-                        callbacks: {
-                          title: function (context) {
-                            let dateLabel = context[0].label;
-                            return dateLabel;
-                          },
-                          label: function (context) {
-                            let label = context.dataset.label || "";
-                            let value = context.parsed.y;
-                            if (chartType === "percentage") {
-                              value = value + "%";
-                            } else {
-                              value = abbreviateNumber(value);
-                            }
-                            return `${label}: ${value}`;
-                          },
-                        },
-                        backgroundColor: "rgba(0,0,0,0.7)",
-                        titleColor: "#FFFFFF",
-                        bodyColor: "#FFFFFF",
+                      label: function (context) {
+                        let label = context.dataset.label || "";
+                        let value = context.parsed.y;
+                        if (chartType === "percentage") {
+                          value = value + "%";
+                        } else {
+                          value = abbreviateNumber(value);
+                        }
+                        return `${label}: ${value}`;
                       },
                     },
-                    scales: {
-                      x: {
-                        title: {
-                          display: true,
-                          text: timeUnit === "Daily" ? "Date" : "Month",
-                          color: "#FFFFFF",
-                        },
-                        ticks: {
-                          color: "#FFFFFF",
-                          maxRotation: 45,
-                          minRotation: 0,
-                          autoSkip: true,
-                          maxTicksLimit: 10,
-                        },
-                      },
-                      y: {
-                        stacked:
-                          chartType === "stacked" || chartType === "percentage",
-                        title: {
-                          display: true,
-                          text:
-                            chartType === "percentage"
-                              ? "Percentage of Total Transactions (%)"
-                              : "Number of Transactions",
-                          color: "#FFFFFF",
-                        },
-                        ticks: {
-                          color: "#FFFFFF",
-                          beginAtZero: true,
-                          callback: function (value) {
-                            return chartType === "percentage"
-                              ? value + "%"
-                              : abbreviateNumber(value);
-                          },
-                        },
+                    backgroundColor: "rgba(0,0,0,0.7)",
+                    titleColor: "#FFFFFF",
+                    bodyColor: "#FFFFFF",
+                  },
+                },
+                scales: {
+                  x: {
+                    title: {
+                      display: true,
+                      text: timeUnit === "Daily" ? "Date" : "Month",
+                      color: "#FFFFFF",
+                    },
+                    ticks: {
+                      color: "#FFFFFF",
+                      maxRotation: 45,
+                      minRotation: 0,
+                      autoSkip: true,
+                      maxTicksLimit: 10,
+                    },
+                  },
+                  y: {
+                    stacked:
+                      chartType === "stacked" || chartType === "percentage",
+                    title: {
+                      display: true,
+                      text:
+                        chartType === "percentage"
+                          ? "Percentage of Total Transactions (%)"
+                          : "Number of Transactions",
+                      color: "#FFFFFF",
+                    },
+                    ticks: {
+                      color: "#FFFFFF",
+                      beginAtZero: true,
+                      callback: function (value) {
+                        return chartType === "percentage"
+                          ? value + "%"
+                          : abbreviateNumber(value);
                       },
                     },
-                    elements: {
-                      point: {
-                        radius: 0, // Remove dots from the chart
-                      },
-                    },
-                  }}
-                />
-                {/* Information Container Below the Chart */}
-                <div className="info-container">
-                  <p className="percentage-info">
-                    The top 10 chains contribute{" "}
-                    <strong>{percentageShare}%</strong> of all transactions so
-                    far.
-                  </p>
-                  <div className="total-transactions-card">
-                    <h3>Total Transactions</h3>
-                    <p>{formattedTotalTransactions}</p>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <div className="chart-placeholder">No data available</div>
-            )}
+                  },
+                },
+                elements: {
+                  point: {
+                    radius: 0, // Remove dots from the chart
+                  },
+                },
+              }}
+            />
+            {/* Information Container Below the Chart */}
+            <div className="info-container">
+              <p className="percentage-info">
+                The top 10 chains contribute <strong>{percentageShare}%</strong>{" "}
+                of all transactions so far.
+              </p>
+              <div className="total-transactions-card">
+                <h3>Total Transactions</h3>
+                <p>{formattedTotalTransactions}</p>
+              </div>
+            </div>
           </div>
         )}
 
@@ -670,85 +794,190 @@ const DailyTransactionsPage = () => {
             {/* Top Chains Pie Chart */}
             <div className="pie-chart">
               <h3>Top 10 Chains Market Share</h3>
-              <Pie
-                data={topChainsPieData}
-                options={{
-                  plugins: {
-                    legend: {
-                      position: "right",
-                      labels: {
-                        color: "#FFFFFF",
+              {topChainsData && (
+                <Pie
+                  data={topChainsPieData}
+                  options={{
+                    plugins: {
+                      legend: {
+                        position: "right",
+                        labels: {
+                          color: "#FFFFFF",
+                        },
                       },
-                    },
-                    tooltip: {
-                      callbacks: {
-                        label: function (context) {
-                          const label = context.label || "";
-                          const value = context.parsed || 0;
-                          const percentage = (
-                            (value / totalTransactionsAllChains) *
-                            100
-                          ).toFixed(2);
-                          const formattedValue = abbreviateNumber(value);
-                          return `${label}: ${formattedValue} (${percentage}%)`;
+                      tooltip: {
+                        callbacks: {
+                          label: function (context) {
+                            const label = context.label || "";
+                            const value = context.parsed || 0;
+                            const percentage = (
+                              (value / totalTransactionsAllChains) *
+                              100
+                            ).toFixed(2);
+                            const formattedValue = abbreviateNumber(value);
+                            return `${label}: ${formattedValue} (${percentage}%)`;
+                          },
                         },
                       },
                     },
-                    datalabels: {
-                      color: "#fff",
-                      formatter: (value, context) => {
-                        const percentage = (
-                          (value / totalTransactionsAllChains) *
-                          100
-                        ).toFixed(2);
-                        return `${percentage}%`;
-                      },
-                    },
-                  },
-                }}
-              />
+                  }}
+                />
+              )}
             </div>
             {/* RaaS Pie Chart */}
             <div className="pie-chart">
               <h3>RaaS Providers Market Share</h3>
-              <Pie
-                data={raasPieData}
-                options={{
-                  plugins: {
-                    legend: {
-                      position: "right",
-                      labels: {
-                        color: "#FFFFFF",
+              {raasData && (
+                <Pie
+                  data={raasPieData}
+                  options={{
+                    plugins: {
+                      legend: {
+                        position: "right",
+                        labels: {
+                          color: "#FFFFFF",
+                        },
                       },
-                    },
-                    tooltip: {
-                      callbacks: {
-                        label: function (context) {
-                          const label = context.label || "";
-                          const value = context.parsed || 0;
-                          const percentage = (
-                            (value / totalTransactionsAllChains) *
-                            100
-                          ).toFixed(2);
-                          const formattedValue = abbreviateNumber(value);
-                          return `${label}: ${formattedValue} (${percentage}%)`;
+                      tooltip: {
+                        callbacks: {
+                          label: function (context) {
+                            const label = context.label || "";
+                            const value = context.parsed || 0;
+                            const percentage = (
+                              (value / totalTransactionsAllChains) *
+                              100
+                            ).toFixed(2);
+                            const formattedValue = abbreviateNumber(value);
+                            return `${label}: ${formattedValue} (${percentage}%)`;
+                          },
                         },
                       },
                     },
-                    datalabels: {
-                      color: "#fff",
-                      formatter: (value, context) => {
-                        const percentage = (
-                          (value / totalTransactionsAllChains) *
-                          100
-                        ).toFixed(2);
-                        return `${percentage}%`;
-                      },
-                    },
-                  },
-                }}
-              />
+                  }}
+                />
+              )}
             </div>
+          </div>
+        )}
+
+        {/* Table Section */}
+        {!loading && (
+          <div className="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>Logo</th>
+                  <th>
+                    Chain Name{" "}
+                    <button onClick={() => handleSort("chainName")}>
+                      {sortConfig.key === "chainName" ? (
+                        sortConfig.direction === "ascending" ? (
+                          <FontAwesomeIcon icon={faSortUp} />
+                        ) : (
+                          <FontAwesomeIcon icon={faSortDown} />
+                        )
+                      ) : (
+                        <FontAwesomeIcon icon={faSortUp} />
+                      )}
+                    </button>
+                  </th>
+                  <th>
+                    Daily Transactions{" "}
+                    <button onClick={() => handleSort("dailyTransactions")}>
+                      {sortConfig.key === "dailyTransactions" ? (
+                        sortConfig.direction === "ascending" ? (
+                          <FontAwesomeIcon icon={faSortUp} />
+                        ) : (
+                          <FontAwesomeIcon icon={faSortDown} />
+                        )
+                      ) : (
+                        <FontAwesomeIcon icon={faSortDown} />
+                      )}
+                    </button>
+                  </th>
+                  <th>
+                    Vertical{" "}
+                    <button onClick={() => handleSort("chainVertical")}>
+                      {sortConfig.key === "chainVertical" ? (
+                        sortConfig.direction === "ascending" ? (
+                          <FontAwesomeIcon icon={faSortUp} />
+                        ) : (
+                          <FontAwesomeIcon icon={faSortDown} />
+                        )
+                      ) : (
+                        <FontAwesomeIcon icon={faSortUp} />
+                      )}
+                    </button>
+                  </th>
+                  <th>
+                    7d{" "}
+                    <button onClick={() => handleSort("percentageIncrease7d")}>
+                      {sortConfig.key === "percentageIncrease7d" ? (
+                        sortConfig.direction === "ascending" ? (
+                          <FontAwesomeIcon icon={faSortUp} />
+                        ) : (
+                          <FontAwesomeIcon icon={faSortDown} />
+                        )
+                      ) : (
+                        <FontAwesomeIcon icon={faSortDown} />
+                      )}
+                    </button>
+                  </th>
+                  <th>
+                    30d{" "}
+                    <button onClick={() => handleSort("percentageIncrease30d")}>
+                      {sortConfig.key === "percentageIncrease30d" ? (
+                        sortConfig.direction === "ascending" ? (
+                          <FontAwesomeIcon icon={faSortUp} />
+                        ) : (
+                          <FontAwesomeIcon icon={faSortDown} />
+                        )
+                      ) : (
+                        <FontAwesomeIcon icon={faSortDown} />
+                      )}
+                    </button>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {tableData.map((chain) => (
+                  <tr key={chain.chainName}>
+                    <td>
+                      {chain.chainLogo ? (
+                        <img
+                          src={chain.chainLogo}
+                          alt={chain.chainName}
+                          className="chain-logo"
+                        />
+                      ) : (
+                        "No Logo"
+                      )}
+                    </td>
+                    <td>{chain.chainName}</td>
+                    <td>{formatNumber(chain.dailyTransactions)}</td>
+                    <td>{chain.chainVertical}</td>
+                    <td
+                      className={
+                        chain.percentageIncrease7d >= 0
+                          ? "positive"
+                          : "negative"
+                      }
+                    >
+                      {chain.percentageIncrease7d.toFixed(2)}%
+                    </td>
+                    <td
+                      className={
+                        chain.percentageIncrease30d >= 0
+                          ? "positive"
+                          : "negative"
+                      }
+                    >
+                      {chain.percentageIncrease30d.toFixed(2)}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
