@@ -18,13 +18,10 @@ import {
   ArcElement,
 } from "chart.js";
 import { Line, Pie } from "react-chartjs-2";
-import {
-  fetchGoogleSheetData,
-  fetchAllTransactions,
-} from "../services/googleSheetService";
+import { fetchGoogleSheetData, fetchAllTransactions } from "../services/a";
 import { abbreviateNumber, formatNumber } from "../utils/numberFormatter";
 import moment from "moment";
-import { saveData, getData } from "../services/indexedDBService";
+import { saveData, getData, clearAllData } from "../services/indexedDBService";
 
 // Register required components for Chart.js
 ChartJS.register(
@@ -46,7 +43,7 @@ const DailyTransactionsPage = () => {
   const [currency, setCurrency] = useState("ETH");
   const [timeUnit, setTimeUnit] = useState("Daily"); // "Daily" or "Monthly"
   const [timeRange, setTimeRange] = useState("90 days");
-  const [selectedRaas, setSelectedRaas] = useState("RaaS"); // Default is "RaaS"
+  const [selectedRaas, setSelectedRaas] = useState("All Raas"); // Default is "All Raas"
   const [chartType, setChartType] = useState("absolute"); // 'absolute', 'stacked', 'percentage'
   const [allChains, setAllChains] = useState([]);
   const [transactionsByChainDate, setTransactionsByChainDate] = useState({});
@@ -61,7 +58,7 @@ const DailyTransactionsPage = () => {
   const SIX_HOURS_IN_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
 
   const raasOptions = [
-    "RaaS",
+    "All Raas",
     "Gelato",
     "Conduit",
     "Caldera",
@@ -79,6 +76,8 @@ const DailyTransactionsPage = () => {
       setLoading(true); // Start loading
       try {
         // Retrieve data from IndexedDB
+        await clearAllData(); // Clear all data in IndexedDB
+
         const storedRecord = await getData(DAILY_DATA_ID);
 
         const sixHoursAgo = Date.now() - SIX_HOURS_IN_MS;
@@ -131,12 +130,17 @@ const DailyTransactionsPage = () => {
   const populateStateWithData = (data) => {
     const { sheetData, transactionsData } = data;
 
-    setAllChains(sheetData);
+    // Filter chains with status "Mainnet"
+    const mainnetChains = sheetData.filter(
+      (chain) => chain.status && chain.status.trim().toLowerCase() === "mainnet"
+    );
+
+    setAllChains(mainnetChains);
     setTransactionsByChainDate(transactionsData.transactionsByChainDate);
 
     // Calculate transactions by RaaS
     const raasTransactions = {};
-    sheetData.forEach((chain) => {
+    mainnetChains.forEach((chain) => {
       const { raas, name } = chain;
       const chainTransactions = transactionsData.transactionsByChainDate[name];
 
@@ -159,7 +163,7 @@ const DailyTransactionsPage = () => {
   const updateChartData = () => {
     // Filter chains based on selected RaaS
     const filteredChains =
-      selectedRaas === "RaaS"
+      selectedRaas === "All Raas"
         ? allChains
         : allChains.filter(
             (chain) =>
@@ -345,9 +349,6 @@ const DailyTransactionsPage = () => {
       currentDate.add(1, "day");
     }
 
-    const last7Days = fullDates.slice(-7); // Last 7 days
-    const previous7Days = fullDates.slice(-14, -7); // Previous 7 days
-
     const last30Days = fullDates.slice(-30); // Last 30 days
     const previous30Days = fullDates.slice(-60, -30); // Previous 30 days
 
@@ -355,7 +356,7 @@ const DailyTransactionsPage = () => {
 
     // Get the filtered chains based on RaaS selection
     const filteredChains =
-      selectedRaas === "RaaS"
+      selectedRaas === "All Raas"
         ? allChains
         : allChains.filter(
             (chain) =>
@@ -366,33 +367,13 @@ const DailyTransactionsPage = () => {
     // For each chain, compute the required data
     filteredChains.forEach((chain) => {
       const chainName = chain.name;
-      const chainLogo = chain.logo || chain.logoUrl || ""; // Use logo or logoUrl
+      const chainLogo = chain.logoUrl || ""; // Use logoUrl
       const chainVertical = chain.vertical || "N/A";
 
       const chainTransactions = transactionsByChainDate[chainName] || {};
 
       // Daily transactions (transactions on yesterday)
       const dailyTransactions = chainTransactions[yesterday] || 0;
-
-      // Sum transactions over last 7 days
-      const last7DaysTransactions = last7Days.reduce((sum, date) => {
-        return sum + (chainTransactions[date] || 0);
-      }, 0);
-
-      // Sum transactions over previous 7 days
-      const previous7DaysTransactions = previous7Days.reduce((sum, date) => {
-        return sum + (chainTransactions[date] || 0);
-      }, 0);
-
-      // Calculate 7d percentage increase
-      const percentageIncrease7d =
-        previous7DaysTransactions > 0
-          ? ((last7DaysTransactions - previous7DaysTransactions) /
-              previous7DaysTransactions) *
-            100
-          : last7DaysTransactions > 0
-          ? 100
-          : 0;
 
       // Sum transactions over last 30 days
       const last30DaysTransactions = last30Days.reduce((sum, date) => {
@@ -419,7 +400,6 @@ const DailyTransactionsPage = () => {
         chainLogo,
         chainVertical,
         dailyTransactions,
-        percentageIncrease7d,
         percentageIncrease30d,
       });
     });
@@ -539,6 +519,7 @@ const DailyTransactionsPage = () => {
         data: raasData,
         backgroundColor: raasColors,
         hoverBackgroundColor: raasColors,
+        borderWidth: 0, // Remove white border
       },
     ],
   };
@@ -563,6 +544,7 @@ const DailyTransactionsPage = () => {
         hoverBackgroundColor: topChainsLabels.map((label) =>
           getColorForChain(label)
         ),
+        borderWidth: 0, // Remove white border
       },
     ],
   };
@@ -631,6 +613,15 @@ const DailyTransactionsPage = () => {
                   </button>
                 ))}
               </div>
+            </div>
+
+            {/* Total Transactions and Percentage Share */}
+            <div className="total-transactions-info">
+              <p>Total Transactions: {formattedTotalTransactions}</p>
+              <p>
+                The top 10 chains contribute <strong>{percentageShare}%</strong>{" "}
+                of all transactions so far.
+              </p>
             </div>
 
             {/* Chart Type Selector */}
@@ -722,6 +713,7 @@ const DailyTransactionsPage = () => {
                   y: {
                     stacked:
                       chartType === "stacked" || chartType === "percentage",
+                    max: chartType === "percentage" ? 100 : undefined, // Limit y-axis to 100% for percentage chart
                     title: {
                       display: true,
                       text:
@@ -748,17 +740,6 @@ const DailyTransactionsPage = () => {
                 },
               }}
             />
-            {/* Information Container Below the Chart */}
-            <div className="info-container">
-              <p className="percentage-info">
-                The top 10 chains contribute <strong>{percentageShare}%</strong>{" "}
-                of all transactions so far.
-              </p>
-              <div className="total-transactions-card">
-                <h3>Total Transactions</h3>
-                <p>{formattedTotalTransactions}</p>
-              </div>
-            </div>
           </div>
         )}
 
@@ -770,8 +751,7 @@ const DailyTransactionsPage = () => {
               <table>
                 <thead>
                   <tr>
-                    <th>Logo</th>
-                    <th>Chain Name</th>
+                    <th>Chain</th>
                     <th>
                       Daily Transactions{" "}
                       <button onClick={handleSort}>
@@ -779,36 +759,28 @@ const DailyTransactionsPage = () => {
                       </button>
                     </th>
                     <th>Vertical</th>
-                    <th>7d %</th>
                     <th>30d %</th>
                   </tr>
                 </thead>
                 <tbody>
                   {tableData.map((chain) => (
                     <tr key={chain.chainName}>
-                      <td>
-                        {chain.chainLogo ? (
-                          <img
-                            src={chain.chainLogo}
-                            alt={chain.chainName}
-                            className="chain-logo"
-                          />
-                        ) : (
-                          "No Logo"
-                        )}
+                      <td className="chain-name-cell">
+                        <img
+                          src={chain.chainLogo}
+                          alt={chain.chainName}
+                          className="chain-logo"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src =
+                              "https://www.helika.io/wp-content/uploads/2023/09/proofofplay_logo.png";
+                          }}
+                        />
+                        {console.log(chain.chainLogo)}
+                        <span>{chain.chainName}</span>
                       </td>
-                      <td>{chain.chainName}</td>
                       <td>{formatNumber(chain.dailyTransactions)}</td>
                       <td>{chain.chainVertical}</td>
-                      <td
-                        className={
-                          chain.percentageIncrease7d >= 0
-                            ? "positive"
-                            : "negative"
-                        }
-                      >
-                        {chain.percentageIncrease7d.toFixed(2)}%
-                      </td>
                       <td
                         className={
                           chain.percentageIncrease30d >= 0

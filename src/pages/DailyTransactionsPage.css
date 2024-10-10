@@ -41,7 +41,6 @@
 
 .heading-container h2 {
   margin-left: 10px;
-
   font-size: 2rem;
   line-height: 1; /* Ensure consistent line height */
 }
@@ -69,6 +68,11 @@
   display: flex;
   justify-content: space-between; /* Separate the groups */
   margin: 20px 35px;
+  position: sticky;
+  top: 0; /* Stick to the top */
+  background-color: #000; /* Match the background */
+  padding: 10px 0;
+  z-index: 1000; /* Ensure it stays above other elements */
 }
 
 .time-range-left,
@@ -97,6 +101,21 @@
 .time-range-left button:hover,
 .time-range-right button:hover {
   background-color: #333;
+}
+
+/* Total Transactions Info */
+.total-transactions-info {
+  margin: 10px 35px;
+  color: #d1d1d1;
+  font-size: 1rem;
+}
+
+.total-transactions-info p {
+  margin: 5px 0;
+}
+
+.total-transactions-info strong {
+  color: #ff3b57;
 }
 
 /* Chart Type Selector */
@@ -140,52 +159,6 @@
   text-align: center;
 }
 
-/* Info Container Below the Chart */
-.info-container {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin: 20px 35px;
-  padding: 15px;
-  background-color: #1c1c1c; /* Deep Black background */
-  border: 2px solid #f5f5f5; /* Light Shade of White border */
-  border-radius: 8px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); /* Subtle shadow for depth */
-}
-
-.percentage-info {
-  color: #d1d1d1; /* Light Grey text for better readability */
-  font-size: 1rem;
-  flex: 1;
-}
-
-.percentage-info strong {
-  color: #ff3b57; /* Vibrant Pink-Red highlight for percentage */
-}
-
-.total-transactions-card {
-  background-color: #2e2e2e; /* Dark Grey background for card */
-  padding: 15px;
-  border: 2px solid #f5f5f5; /* Light Shade of White border */
-  border-radius: 8px;
-  text-align: center;
-  min-width: 200px;
-  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3); /* Consistent shadow */
-}
-
-.total-transactions-card h3 {
-  margin: 0;
-  margin-bottom: 10px;
-  color: #ff3b57; /* Vibrant Pink-Red for heading text */
-  font-size: 1.2rem;
-}
-
-.total-transactions-card p {
-  margin: 0;
-  font-size: 1.5rem;
-  color: #ffffff; /* White text for high contrast */
-}
-
 /* Table Section */
 .table-section {
   margin: 20px 35px;
@@ -206,7 +179,7 @@ table {
   width: 100%;
   border-collapse: collapse;
   background-color: #1c1c1c;
-  border: 1px solid #ffffff;
+  /* Removed border */
 }
 
 th,
@@ -217,9 +190,10 @@ td {
 }
 
 th {
-  background-color: #2e2e2e;
+  background-color: transparent;
   position: sticky;
   top: 0;
+  border-bottom: 1px solid #ffffff; /* Added subtle underline */
 }
 
 th button {
@@ -230,16 +204,25 @@ th button {
   margin-left: 5px;
 }
 
-tr:nth-child(even) {
-  background-color: #2a2a2a;
+/* Remove alternating row colors */
+tr {
+  background-color: transparent;
 }
 
-.chain-logo {
+/* Chain Name Cell */
+.chain-name-cell {
+  display: flex;
+  align-items: center;
+}
+
+.chain-name-cell .chain-logo {
   width: 40px;
   height: 40px;
   object-fit: contain;
+  margin-right: 10px;
 }
 
+/* Positive and Negative percentage styles */
 .positive {
   color: #28a745; /* Green for positive percentage */
 }
@@ -260,7 +243,7 @@ tr:nth-child(even) {
 }
 
 .pie-chart-card {
-  flex: 1 1 calc(20% - 20px);
+  flex: 1 1 calc(35% - 20px);
   background-color: #1c1c1c;
   padding: 15px;
   border-radius: 8px;
@@ -294,13 +277,18 @@ tr:nth-child(even) {
     width: 100%;
   }
 
-  .info-container {
+  .time-range-selector {
     flex-direction: column;
     align-items: flex-start;
   }
 
-  .total-transactions-card {
-    margin-top: 15px;
-    width: 100%;
+  .time-range-left,
+  .time-range-right {
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+  }
+
+  .total-transactions-info {
+    margin: 10px 20px;
   }
 }

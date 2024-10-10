@@ -1,4 +1,4 @@
-// googleSheetService.js
+// src/services/googleSheetService.js
 
 import axios from "axios";
 import moment from "moment";
@@ -26,7 +26,8 @@ export const fetchGoogleSheetData = async () => {
       da: row[11], // Column L: Data Availability (DA)
       l2OrL3: row[12], // Column M: L2/L3
       settlementWhenL3: row[13], // Column N: Settlement when L3
-      logo: row[14], // Column O: Logo (if present)
+      logoUrl: row[15], // Column O: Logo URL
+      status: row[16], // Column P: Status
     }));
   } catch (error) {
     console.error("Error fetching Google Sheets data:", error);
@@ -70,7 +71,7 @@ export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
   }
 };
 
-// Updated function to calculate transactions across all chains
+// Fetch transactions across all chains in parallel
 export const fetchAllTransactions = async (sheetData) => {
   let totalTransactionsCombined = 0;
   const transactionsByChainDate = {};
@@ -92,18 +93,21 @@ export const fetchAllTransactions = async (sheetData) => {
     });
   };
 
-  for (const chain of sheetData) {
-    const { blockScoutUrl, launchDate, name } = chain;
-    try {
-      const { transactions } = await fetchBlockExplorerData(
-        blockScoutUrl,
-        launchDate
-      );
-      processTransactionData(transactions, name);
-    } catch (error) {
-      console.error(`Error fetching transactions for ${name}:`, error);
-    }
-  }
+  // Fetch all transactions in parallel using Promise.all
+  await Promise.all(
+    sheetData.map(async (chain) => {
+      const { blockScoutUrl, launchDate, name } = chain;
+      try {
+        const { transactions } = await fetchBlockExplorerData(
+          blockScoutUrl,
+          launchDate
+        );
+        processTransactionData(transactions, name);
+      } catch (error) {
+        console.error(`Error fetching transactions for ${name}:`, error);
+      }
+    })
+  );
 
   return {
     transactionsByChainDate, // Return the new data
