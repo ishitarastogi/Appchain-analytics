@@ -1,4 +1,4 @@
-// googleSheetService.js
+// src/services/googleSheetService.js
 
 import axios from "axios";
 import moment from "moment";
@@ -14,7 +14,7 @@ export const fetchGoogleSheetData = async () => {
     return rows.map((row) => ({
       name: row[0], // Column A: Name
       blockScoutUrl: row[1], // Column B: Blockscout URL
-      id: row[2], // Column C: ID
+      projectId: row[2], // Column C: ID
       website: row[3], // Column D: Website
       raas: row[4], // Column E: RaaS
       year: row[5], // Column F: Year
@@ -26,7 +26,8 @@ export const fetchGoogleSheetData = async () => {
       da: row[11], // Column L: Data Availability (DA)
       l2OrL3: row[12], // Column M: L2/L3
       settlementWhenL3: row[13], // Column N: Settlement when L3
-      logo: row[14], // Column O: Logo (if present)
+      logoUrl: row[15], // Column O: Logo URL
+      status: row[16], // Column P: Status
     }));
   } catch (error) {
     console.error("Error fetching Google Sheets data:", error);
@@ -34,6 +35,98 @@ export const fetchGoogleSheetData = async () => {
   }
 };
 
+// Fetch TPS Data for a single chain using l2beat API
+export const fetchLatestTpsData = async (projectId) => {
+  const inputParam = encodeURIComponent(
+    JSON.stringify({
+      0: {
+        json: {
+          range: "max",
+          filter: {
+            type: "projects",
+            projectIds: [projectId],
+          },
+        },
+      },
+    })
+  );
+
+  const baseUrl = `https://l2beat.com/api/trpc/activity.chart?batch=1&input=${inputParam}`;
+
+  // Proxy server logic
+  const isDevelopment =
+    !process.env.NODE_ENV || process.env.NODE_ENV === "development";
+  const proxyBaseUrl = isDevelopment
+    ? "http://localhost:3000/api/proxy?url="
+    : "/api/proxy?url=";
+
+  try {
+    const fullUrl = `${proxyBaseUrl}${encodeURIComponent(baseUrl)}`;
+    const response = await axios.get(fullUrl);
+    console.log(`Proxy response for ${projectId}:`, response.data);
+
+    // Check if response contains the expected structure
+    if (
+      !response.data ||
+      !response.data[0] ||
+      !response.data[0].result ||
+      !response.data[0].result.data ||
+      !response.data[0].result.data.json
+    ) {
+      throw new Error(
+        `Invalid response structure from the proxy for ${projectId}`
+      );
+    }
+
+    const data = response.data[0].result.data.json;
+
+    // Process the TPS data
+    // Data is an array of arrays: [[timestamp, tpsValue, ...], ...]
+    const tpsData = data.map((item) => {
+      const timestamp = item[0]; // Unix timestamp in seconds
+      const tpsValue = item[1]; // TPS value
+      const date = moment.unix(timestamp).format("YYYY-MM-DD");
+      return {
+        date,
+        value: tpsValue,
+      };
+    });
+
+    return tpsData;
+  } catch (error) {
+    console.error(`Error fetching TPS data for ${projectId}:`, error.message);
+    return []; // Return empty array on error
+  }
+};
+
+// Fetch TPS data across all chains and structure the data
+export const fetchAllTpsData = async (sheetData) => {
+  const tpsDataByChainDate = {};
+
+  // Create an array of promises to fetch data in parallel
+  const fetchPromises = sheetData
+    .filter((chain) => chain.projectId) // Ensure projectId is present
+    .map(async (chain) => {
+      const { name, projectId } = chain;
+      try {
+        const tpsData = await fetchLatestTpsData(projectId);
+        // Aggregate data by date
+        const chainTpsByDate = {};
+        tpsData.forEach(({ date, value }) => {
+          chainTpsByDate[date] = value;
+        });
+        tpsDataByChainDate[name] = chainTpsByDate;
+      } catch (error) {
+        console.error(`Error fetching TPS data for ${name}:`, error);
+      }
+    });
+
+  await Promise.all(fetchPromises);
+
+  return {
+    tpsDataByChainDate,
+  };
+};
 // Fetch Block Explorer Data for a single chain (transactions)
 export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
   const normalizedUrl = blockScoutUrl.replace(/\/+$/, "");
@@ -155,16 +248,30 @@ export const fetchAllActiveAccounts = async (sheetData) => {
   };
 };
 
-// Updated function to calculate transactions across all chains
+// Fetch all transactions across all chains and structure the data
 export const fetchAllTransactions = async (sheetData) => {
   let totalTransactionsCombined = 0;
   const transactionDataByWeek = {};
   const transactionsByChain = {};
-  const transactionsByChainDate = {}; // New addition
+  const transactionsByChainDate = {};
+
+  // Create an array of promises to fetch data in parallel
+  const fetchPromises = sheetData.map(async (chain) => {
+    const { blockScoutUrl, launchDate, name } = chain;
+    try {
+      const { transactions } = await fetchBlockExplorerData(
+        blockScoutUrl,
+        launchDate
+      );
+      processTransactionData(transactions, name);
+    } catch (error) {
+      console.error(`Error fetching transactions for ${name}:`, error);
+    }
+  });
 
   const processTransactionData = (transactions, chainName) => {
     transactions.forEach(({ date, value }) => {
-      const week = moment(date).startOf("isoWeek").format("GGGG-[W]WW"); // Correct format
+      const week = moment(date).startOf("isoWeek").format("GGGG-[W]WW");
       const parsedValue = parseInt(value, 10);
 
       // Validate week key format
@@ -175,11 +282,6 @@ export const fetchAllTransactions = async (sheetData) => {
         );
         return; // Skip malformed week keys
       }
-
-      // Log the week key for debugging
-      console.log(
-        `Processing Chain: ${chainName}, Date: ${date}, Week: ${week}, Value: ${parsedValue}`
-      );
 
       // Aggregate by week
       if (!transactionDataByWeek[week]) {
@@ -209,23 +311,13 @@ export const fetchAllTransactions = async (sheetData) => {
     });
   };
 
-  for (const chain of sheetData) {
-    const { blockScoutUrl, launchDate, name } = chain;
-    try {
-      const { transactions } = await fetchBlockExplorerData(
-        blockScoutUrl,
-        launchDate
-      );
-      processTransactionData(transactions, name);
-    } catch (error) {
-      console.error(`Error fetching transactions for ${name}:`, error);
-    }
-  }
+  // Await all fetch promises
+  await Promise.all(fetchPromises);
 
   return {
     transactionDataByWeek,
     transactionsByChain,
-    transactionsByChainDate, // Return the new data
+    transactionsByChainDate,
     totalTransactionsCombined,
   };
 };

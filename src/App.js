@@ -5,7 +5,7 @@ import Home from "./pages/Home";
 import DailyTransactionsPage from "./pages/DailyTransactionsPage";
 import ActiveAccountsPage from "./pages/ActiveAccountsPage";
 import TPSPage from "./pages/abc"; // Import the new TPSPage component
-
+import TVLPage from "./pages/TVL";
 const App = () => {
   return (
     <Router>
@@ -14,6 +14,7 @@ const App = () => {
         <Route path="/daily-transactions" element={<DailyTransactionsPage />} />
         <Route path="/active-accounts" element={<ActiveAccountsPage />} />
         <Route path="/tps" element={<TPSPage />} /> {/* New Route */}
+        <Route path="/tvl" element={<TVLPage />} /> {/* New Route */}
       </Routes>
     </Router>
   );

@@ -1,10 +1,10 @@
-// src/pages/DailyTransactionsPage.js
+// src/pages/ActiveAccountsPage.js
 
 import React, { useState, useEffect } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faChartLine, faSort } from "@fortawesome/free-solid-svg-icons";
-import "./DailyTransactionsPage.css";
+import { faUsers, faSort } from "@fortawesome/free-solid-svg-icons";
+import "./ActiveAccountsPage.css";
 import {
   Chart as ChartJS,
   LineElement,
@@ -18,7 +18,10 @@ import {
   ArcElement,
 } from "chart.js";
 import { Line, Pie } from "react-chartjs-2";
-import { fetchGoogleSheetData, fetchAllTransactions } from "../services/a";
+import {
+  fetchGoogleSheetData,
+  fetchAllActiveAccounts,
+} from "../services/googleSheetService";
 import { abbreviateNumber, formatNumber } from "../utils/numberFormatter";
 import moment from "moment";
 import { saveData, getData, clearAllData } from "../services/indexedDBService";
@@ -36,26 +39,25 @@ ChartJS.register(
   ArcElement
 );
 
-const DAILY_DATA_ID = "dailyTransactionData"; // Unique ID for IndexedDB
+const ACTIVE_ACCOUNTS_DATA_ID = "activeAccountsData"; // Unique ID for IndexedDB
+const SIX_HOURS_IN_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
 
-const DailyTransactionsPage = () => {
+const ActiveAccountsPage = () => {
   // State variables
-  const [currency, setCurrency] = useState("ETH");
   const [timeUnit, setTimeUnit] = useState("Daily"); // "Daily" or "Monthly"
   const [timeRange, setTimeRange] = useState("90 days");
   const [selectedRaas, setSelectedRaas] = useState("All Raas"); // Default is "All Raas"
   const [chartType, setChartType] = useState("absolute"); // 'absolute', 'stacked', 'percentage'
   const [allChains, setAllChains] = useState([]);
-  const [transactionsByChainDate, setTransactionsByChainDate] = useState({});
+  const [activeAccountsByChainDate, setActiveAccountsByChainDate] = useState(
+    {}
+  );
   const [chartData, setChartData] = useState(null);
-  const [chartDates, setChartDates] = useState([]); // State variable for dates
-  const [topChains, setTopChains] = useState([]);
-  const [topChainsList, setTopChainsList] = useState([]); // Added state for topChainsList
-  const [transactionsByRaas, setTransactionsByRaas] = useState({}); // New state for RaaS transactions
-  const [tableData, setTableData] = useState([]); // State for table data
+  const [topChainsList, setTopChainsList] = useState([]);
+  const [activeAccountsByRaas, setActiveAccountsByRaas] = useState({});
+  const [tableData, setTableData] = useState([]);
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true); // Loading state
-  const SIX_HOURS_IN_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
+  const [loading, setLoading] = useState(true);
 
   const raasOptions = [
     "All Raas",
@@ -73,40 +75,39 @@ const DailyTransactionsPage = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      setLoading(true); // Start loading
+      setLoading(true);
       try {
-        // Retrieve data from IndexedDB
-        // await clearAllData(); // Clear all data in IndexedDB
-
-        const storedRecord = await getData(DAILY_DATA_ID);
+        const storedRecord = await getData(ACTIVE_ACCOUNTS_DATA_ID);
 
         const sixHoursAgo = Date.now() - SIX_HOURS_IN_MS;
 
         if (storedRecord && storedRecord.timestamp > sixHoursAgo) {
           // Use stored data if it's less than 6 hours old
           populateStateWithData(storedRecord.data);
-          setLoading(false); // End loading
+          setLoading(false);
           return;
         }
 
         // Fetch new data if no valid stored data is available
         const sheetData = await fetchGoogleSheetData();
-        const transactionsData = await fetchAllTransactions(sheetData);
+        const activeAccountsData = await fetchAllActiveAccounts(sheetData);
 
         const newData = {
           sheetData,
-          transactionsData,
+          activeAccountsData,
         };
 
         // Save new data to IndexedDB
-        await saveData(DAILY_DATA_ID, newData);
+        await saveData(ACTIVE_ACCOUNTS_DATA_ID, newData);
 
         populateStateWithData(newData);
       } catch (error) {
         console.error("Error during data fetching:", error);
-        setError("Failed to load transaction data. Please try again later.");
+        setError(
+          "Failed to load active accounts data. Please try again later."
+        );
       } finally {
-        setLoading(false); // End loading regardless of success or failure
+        setLoading(false);
       }
     };
 
@@ -114,13 +115,13 @@ const DailyTransactionsPage = () => {
   }, []);
 
   useEffect(() => {
-    if (allChains.length && Object.keys(transactionsByChainDate).length) {
+    if (allChains.length && Object.keys(activeAccountsByChainDate).length) {
       updateChartData();
       updateTableData();
     }
   }, [
     allChains,
-    transactionsByChainDate,
+    activeAccountsByChainDate,
     timeUnit,
     timeRange,
     selectedRaas,
@@ -128,36 +129,39 @@ const DailyTransactionsPage = () => {
   ]);
 
   const populateStateWithData = (data) => {
-    const { sheetData, transactionsData } = data;
+    const { sheetData, activeAccountsData } = data;
 
-    // Filter chains with status "Mainnet"
+    // Filter chains with status "Mainnet" (if applicable)
     const mainnetChains = sheetData.filter(
       (chain) => chain.status && chain.status.trim().toLowerCase() === "mainnet"
     );
 
-    setAllChains(mainnetChains);
-    setTransactionsByChainDate(transactionsData.transactionsByChainDate);
+    // If 'status' is not available, use all chains
+    const chainsToUse = mainnetChains.length ? mainnetChains : sheetData;
 
-    // Calculate transactions by RaaS
-    const raasTransactions = {};
-    mainnetChains.forEach((chain) => {
+    setAllChains(chainsToUse);
+    setActiveAccountsByChainDate(activeAccountsData.activeAccountsByChainDate);
+
+    // Calculate active accounts by RaaS
+    const raasActiveAccounts = {};
+    chainsToUse.forEach((chain) => {
       const { raas, name } = chain;
-      const chainTransactions = transactionsData.transactionsByChainDate[name];
+      const chainActiveAccounts =
+        activeAccountsData.activeAccountsByChainDate[name];
 
-      if (chainTransactions) {
-        const totalChainTransactions = Object.values(chainTransactions).reduce(
-          (acc, val) => acc + val,
-          0
-        );
+      if (chainActiveAccounts) {
+        const totalChainActiveAccounts = Object.values(
+          chainActiveAccounts
+        ).reduce((acc, val) => acc + val, 0);
 
-        if (!raasTransactions[raas]) {
-          raasTransactions[raas] = 0;
+        if (!raasActiveAccounts[raas]) {
+          raasActiveAccounts[raas] = 0;
         }
-        raasTransactions[raas] += totalChainTransactions;
+        raasActiveAccounts[raas] += totalChainActiveAccounts;
       }
     });
 
-    setTransactionsByRaas(raasTransactions);
+    setActiveAccountsByRaas(raasActiveAccounts);
   };
 
   const updateChartData = () => {
@@ -173,7 +177,6 @@ const DailyTransactionsPage = () => {
 
     // Aggregate data based on the selected time range and unit
     const dates = getFilteredDates();
-    setChartDates(dates); // Store dates in state for access in tooltips
 
     // Prepare labels and datasets
     let labels = [];
@@ -189,35 +192,34 @@ const DailyTransactionsPage = () => {
     }
 
     const chainTotals = filteredChains.map((chain) => {
-      const transactionCounts = dates.map(
-        (date) => transactionsByChainDate[chain.name]?.[date] || 0
+      const activeAccountCounts = dates.map(
+        (date) => activeAccountsByChainDate[chain.name]?.[date] || 0
       );
-      const total = transactionCounts.reduce((acc, val) => acc + val, 0);
+      const total = activeAccountCounts.reduce((acc, val) => acc + val, 0);
       return { name: chain.name, total };
     });
 
     chainTotals.sort((a, b) => b.total - a.total);
     const topChainsList = chainTotals.slice(0, 10);
-    setTopChainsList(topChainsList); // Store topChainsList in state
+    setTopChainsList(topChainsList);
     const topChainsNames = topChainsList.map((chain) => chain.name);
-    setTopChains(topChainsNames);
 
-    const totalTransactionsByDate = {};
+    const totalActiveAccountsByDate = {};
 
     topChainsNames.forEach((chainName) => {
       const chainData = [];
       if (timeUnit === "Daily") {
         dates.forEach((date, idx) => {
-          const value = transactionsByChainDate[chainName]?.[date] || 0;
+          const value = activeAccountsByChainDate[chainName]?.[date] || 0;
           chainData.push(value);
 
-          // Aggregate total transactions
-          totalTransactionsByDate[date] =
-            (totalTransactionsByDate[date] || 0) + value;
+          // Aggregate total active accounts
+          totalActiveAccountsByDate[date] =
+            (totalActiveAccountsByDate[date] || 0) + value;
         });
       } else {
         const monthlyData = aggregateMonthlyData(
-          transactionsByChainDate[chainName] || {},
+          activeAccountsByChainDate[chainName] || {},
           dates
         );
         const months = getMonthlyLabels(dates);
@@ -225,9 +227,9 @@ const DailyTransactionsPage = () => {
           const value = monthlyData[month] || 0;
           chainData.push(value);
 
-          // Aggregate total transactions
-          totalTransactionsByDate[month] =
-            (totalTransactionsByDate[month] || 0) + value;
+          // Aggregate total active accounts
+          totalActiveAccountsByDate[month] =
+            (totalActiveAccountsByDate[month] || 0) + value;
         });
       }
 
@@ -247,7 +249,7 @@ const DailyTransactionsPage = () => {
         dataset.data = dataset.data.map((value, idx) => {
           const dateKey =
             timeUnit === "Daily" ? dates[idx] : getMonthlyLabels(dates)[idx];
-          const total = totalTransactionsByDate[dateKey] || 1;
+          const total = totalActiveAccountsByDate[dateKey] || 1;
           return ((value / total) * 100).toFixed(2);
         });
       });
@@ -367,31 +369,34 @@ const DailyTransactionsPage = () => {
     // For each chain, compute the required data
     filteredChains.forEach((chain) => {
       const chainName = chain.name;
-      const chainLogo = chain.logoUrl || ""; // Use logoUrl
+      const chainLogo = chain.logo || ""; // Use logo field
       const chainVertical = chain.vertical || "N/A";
 
-      const chainTransactions = transactionsByChainDate[chainName] || {};
+      const chainActiveAccounts = activeAccountsByChainDate[chainName] || {};
 
-      // Daily transactions (transactions on yesterday)
-      const dailyTransactions = chainTransactions[yesterday] || 0;
+      // Daily active accounts (active accounts on yesterday)
+      const dailyActiveAccounts = chainActiveAccounts[yesterday] || 0;
 
-      // Sum transactions over last 30 days
-      const last30DaysTransactions = last30Days.reduce((sum, date) => {
-        return sum + (chainTransactions[date] || 0);
+      // Sum active accounts over last 30 days
+      const last30DaysActiveAccounts = last30Days.reduce((sum, date) => {
+        return sum + (chainActiveAccounts[date] || 0);
       }, 0);
 
-      // Sum transactions over previous 30 days
-      const previous30DaysTransactions = previous30Days.reduce((sum, date) => {
-        return sum + (chainTransactions[date] || 0);
-      }, 0);
+      // Sum active accounts over previous 30 days
+      const previous30DaysActiveAccounts = previous30Days.reduce(
+        (sum, date) => {
+          return sum + (chainActiveAccounts[date] || 0);
+        },
+        0
+      );
 
       // Calculate 30d percentage increase
       const percentageIncrease30d =
-        previous30DaysTransactions > 0
-          ? ((last30DaysTransactions - previous30DaysTransactions) /
-              previous30DaysTransactions) *
+        previous30DaysActiveAccounts > 0
+          ? ((last30DaysActiveAccounts - previous30DaysActiveAccounts) /
+              previous30DaysActiveAccounts) *
             100
-          : last30DaysTransactions > 0
+          : last30DaysActiveAccounts > 0
           ? 100
           : 0;
 
@@ -399,13 +404,13 @@ const DailyTransactionsPage = () => {
         chainName,
         chainLogo,
         chainVertical,
-        dailyTransactions,
+        dailyActiveAccounts,
         percentageIncrease30d,
       });
     });
 
-    // Sort only on dailyTransactions column
-    tableData.sort((a, b) => b.dailyTransactions - a.dailyTransactions);
+    // Sort only on dailyActiveAccounts column
+    tableData.sort((a, b) => b.dailyActiveAccounts - a.dailyActiveAccounts);
 
     // Take top 10 chains
     const top10TableData = tableData.slice(0, 10);
@@ -454,7 +459,7 @@ const DailyTransactionsPage = () => {
       Arenaz: "#FFCE56",
       "Edu Chain": "#4BC0C0",
       Caldera: "#EC6731",
-      Other: "#999999", // Color for 'Other' slice
+      Other: "#999999",
     };
     return colorMap[chainName] || getRandomColor();
   };
@@ -468,39 +473,40 @@ const DailyTransactionsPage = () => {
     return color;
   };
 
-  // Calculate total transactions of all chains
-  const totalTransactionsAllChains = allChains.reduce((sum, chain) => {
-    const chainTransactions = transactionsByChainDate[chain.name] || {};
+  // Calculate total active accounts of all chains
+  const totalActiveAccountsAllChains = allChains.reduce((sum, chain) => {
+    const chainActiveAccounts = activeAccountsByChainDate[chain.name] || {};
     return (
       sum +
-      Object.values(chainTransactions).reduce(
+      Object.values(chainActiveAccounts).reduce(
         (chainSum, val) => chainSum + val,
         0
       )
     );
   }, 0);
 
-  // Calculate total transactions for the top 10 chains
-  const totalTransactionsTopChains = topChainsList.reduce((sum, chain) => {
+  // Calculate total active accounts for the top 10 chains
+  const totalActiveAccountsTopChains = topChainsList.reduce((sum, chain) => {
     return sum + chain.total;
   }, 0);
 
-  // Format total transactions
-  const formattedTotalTransactions = formatNumber(
-    totalTransactionsAllChains,
+  // Format total active accounts
+  const formattedTotalActiveAccounts = formatNumber(
+    totalActiveAccountsAllChains,
     2
   );
 
   // Calculate percentage share
-  const percentageShare = totalTransactionsAllChains
-    ? ((totalTransactionsTopChains / totalTransactionsAllChains) * 100).toFixed(
-        2
-      )
+  const percentageShare = totalActiveAccountsAllChains
+    ? (
+        (totalActiveAccountsTopChains / totalActiveAccountsAllChains) *
+        100
+      ).toFixed(2)
     : 0;
 
   // Data for RaaS Pie Chart
-  const raasLabels = Object.keys(transactionsByRaas);
-  const raasData = raasLabels.map((raas) => transactionsByRaas[raas]);
+  const raasLabels = Object.keys(activeAccountsByRaas);
+  const raasData = raasLabels.map((raas) => activeAccountsByRaas[raas]);
   const raasColors = raasLabels.map((raas) => {
     const colorMap = {
       Gelato: "#ff3b57",
@@ -519,7 +525,7 @@ const DailyTransactionsPage = () => {
         data: raasData,
         backgroundColor: raasColors,
         hoverBackgroundColor: raasColors,
-        borderWidth: 0, // Remove white border
+        borderWidth: 0,
       },
     ],
   };
@@ -527,7 +533,7 @@ const DailyTransactionsPage = () => {
   // Data for Top Chains Pie Chart
   // Include "Other" as the 11th slice
   const otherChainsTotal =
-    totalTransactionsAllChains - totalTransactionsTopChains;
+    totalActiveAccountsAllChains - totalActiveAccountsTopChains;
   const topChainsData = topChainsList.map((chain) => chain.total);
   const topChainsLabels = topChainsList.map((chain) => chain.name);
   topChainsLabels.push("Other");
@@ -544,24 +550,24 @@ const DailyTransactionsPage = () => {
         hoverBackgroundColor: topChainsLabels.map((label) =>
           getColorForChain(label)
         ),
-        borderWidth: 0, // Remove white border
+        borderWidth: 0,
       },
     ],
   };
 
   return (
-    <div className="daily-transactions-page">
+    <div className="active-accounts-page">
       <Sidebar />
       <div className="main-content">
         {/* Header */}
         <div className="transactions-header">
           <div className="heading-container">
-            <FontAwesomeIcon icon={faChartLine} className="icon" />
+            <FontAwesomeIcon icon={faUsers} className="icon" />
             <div>
-              <h2>Daily Transactions</h2>
+              <h2>Active Accounts</h2>
               <p className="description">
-                Tracks the total number of transactions executed on the
-                blockchain each day
+                Tracks the total number of active accounts on the blockchain
+                each day
               </p>
             </div>
           </div>
@@ -615,12 +621,12 @@ const DailyTransactionsPage = () => {
               </div>
             </div>
 
-            {/* Total Transactions and Percentage Share */}
+            {/* Total Active Accounts and Percentage Share */}
             <div className="total-transactions-info">
-              <p>Total Transactions: {formattedTotalTransactions}</p>
+              <p>Total Active Accounts: {formattedTotalActiveAccounts}</p>
               <p>
                 The top 10 chains contribute <strong>{percentageShare}%</strong>{" "}
-                of all transactions so far.
+                of all active accounts so far.
               </p>
             </div>
 
@@ -668,7 +674,7 @@ const DailyTransactionsPage = () => {
                   },
                   title: {
                     display: true,
-                    text: `Transactions - ${timeRange}`,
+                    text: `Active Accounts - ${timeRange}`,
                     color: "#FFFFFF",
                   },
                   tooltip: {
@@ -713,13 +719,13 @@ const DailyTransactionsPage = () => {
                   y: {
                     stacked:
                       chartType === "stacked" || chartType === "percentage",
-                    max: chartType === "percentage" ? 100 : undefined, // Limit y-axis to 100% for percentage chart
+                    max: chartType === "percentage" ? 100 : undefined,
                     title: {
                       display: true,
                       text:
                         chartType === "percentage"
-                          ? "Percentage of Total Transactions (%)"
-                          : "Number of Transactions",
+                          ? "Percentage of Total Active Accounts (%)"
+                          : "Number of Active Accounts",
                       color: "#FFFFFF",
                     },
                     ticks: {
@@ -735,7 +741,7 @@ const DailyTransactionsPage = () => {
                 },
                 elements: {
                   point: {
-                    radius: 0, // Remove dots from the chart
+                    radius: 0,
                   },
                 },
               }}
@@ -753,7 +759,7 @@ const DailyTransactionsPage = () => {
                   <tr>
                     <th>Chain</th>
                     <th>
-                      Daily Transactions{" "}
+                      Daily Active Accounts{" "}
                       <button onClick={handleSort}>
                         <FontAwesomeIcon icon={faSort} />
                       </button>
@@ -773,13 +779,12 @@ const DailyTransactionsPage = () => {
                           onError={(e) => {
                             e.target.onerror = null;
                             e.target.src =
-                              "https://www.helika.io/wp-content/uploads/2023/09/proofofplay_logo.png";
+                              "https://uploads.commoninja.com/searchengine/wordpress/fallback.png";
                           }}
                         />
-                        {console.log(chain.chainLogo)}
                         <span>{chain.chainName}</span>
                       </td>
-                      <td>{formatNumber(chain.dailyTransactions)}</td>
+                      <td>{formatNumber(chain.dailyActiveAccounts)}</td>
                       <td>{chain.chainVertical}</td>
                       <td
                         className={
@@ -823,7 +828,7 @@ const DailyTransactionsPage = () => {
                               const label = context.label || "";
                               const value = context.parsed || 0;
                               const percentage = (
-                                (value / totalTransactionsAllChains) *
+                                (value / totalActiveAccountsAllChains) *
                                 100
                               ).toFixed(2);
                               const formattedValue = abbreviateNumber(value);
@@ -856,7 +861,7 @@ const DailyTransactionsPage = () => {
                               const label = context.label || "";
                               const value = context.parsed || 0;
                               const percentage = (
-                                (value / totalTransactionsAllChains) *
+                                (value / totalActiveAccountsAllChains) *
                                 100
                               ).toFixed(2);
                               const formattedValue = abbreviateNumber(value);
@@ -877,4 +882,4 @@ const DailyTransactionsPage = () => {
   );
 };
 
-export default DailyTransactionsPage;
+export default ActiveAccountsPage;

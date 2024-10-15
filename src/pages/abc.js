@@ -1,483 +1,678 @@
-// // TpssPage.js
+// src/pages/TpssPage.js
 
-// import React, { useState, useEffect, useMemo, useCallback } from "react";
-// import Sidebar from "../Sidebar/Sidebar";
-// import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-// import { faTachometerAlt } from "@fortawesome/free-solid-svg-icons";
-// import "./ActiveAccountsPage.css";
-// import { Line } from "react-chartjs-2";
-// import {
-//   Chart as ChartJS,
-//   LineElement,
-//   PointElement,
-//   CategoryScale,
-//   LinearScale,
-//   TimeScale,
-//   Title,
-//   Tooltip,
-//   Legend,
-// } from "chart.js";
-// import "chartjs-adapter-moment";
-// import {
-//   fetchGoogleSheetData,
-//   fetchAllTpsData,
-// } from "../services/googleTPSService";
-// import { saveData, getData, clearAllData } from "../services/indexedDBService";
-// import moment from "moment";
+import React, { useState, useEffect } from "react";
+import Sidebar from "../Sidebar/Sidebar";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faTachometerAlt } from "@fortawesome/free-solid-svg-icons";
+import "./abc.css";
+import {
+  Chart as ChartJS,
+  LineElement,
+  PointElement,
+  CategoryScale,
+  LinearScale,
+  TimeScale,
+  Title,
+  Tooltip,
+  Legend,
+} from "chart.js";
+import { Line } from "react-chartjs-2";
+import "chartjs-adapter-moment";
+import {
+  fetchGoogleSheetData,
+  fetchAllTpsData,
+} from "../services/googleSheetService";
+import { abbreviateNumber, formatNumber } from "../utils/numberFormatter";
+import moment from "moment";
+import { saveData, getData, clearAllData } from "../services/indexedDBService";
 
-// ChartJS.register(
-//   LineElement,
-//   PointElement,
-//   CategoryScale,
-//   LinearScale,
-//   TimeScale,
-//   Title,
-//   Tooltip,
-//   Legend
-// );
+// Register Chart.js components
+ChartJS.register(
+  LineElement,
+  PointElement,
+  CategoryScale,
+  LinearScale,
+  TimeScale,
+  Title,
+  Tooltip,
+  Legend
+);
 
-// const TpssPage = () => {
-//   const [gelatoChains, setGelatoChains] = useState([]);
-//   const [tpsData, setTpsData] = useState({});
-//   const [chartData, setChartData] = useState(null);
-//   const [error, setError] = useState(null);
-//   const [loading, setLoading] = useState(true);
-//   const [timeRange, setTimeRange] = useState("Monthly");
-//   const [lastUpdated, setLastUpdated] = useState(null);
+const TPS_DATA_ID = "tpsData"; // Unique ID for IndexedDB
+const SIX_HOURS_IN_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
 
-//   // Memoized fetchData function
-//   const fetchData = useCallback(async (forceRefresh = false) => {
-//     setLoading(true);
-//     try {
-//       const storedData = await getData("tpsData");
-//       const now = Date.now();
-//       let newData;
+const TpssPage = () => {
+  // State variables
+  const [timeUnit, setTimeUnit] = useState("Daily"); // "Daily" or "Monthly"
+  const [timeRange, setTimeRange] = useState("90 days");
+  const [selectedRaas, setSelectedRaas] = useState("All Raas"); // Default is "All Raas"
+  const [chartType, setChartType] = useState("absolute"); // 'absolute', 'stacked', 'percentage'
+  const [allChains, setAllChains] = useState([]);
+  const [tpsDataByChainDate, setTpsDataByChainDate] = useState({});
+  const [chartData, setChartData] = useState(null);
+  const [topChainsList, setTopChainsList] = useState([]);
+  const [tpsByRaas, setTpsByRaas] = useState({});
+  const [tableData, setTableData] = useState([]);
+  const [error, setError] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-//       if (
-//         storedData &&
-//         now - storedData.timestamp < 6 * 60 * 60 * 1000 &&
-//         !forceRefresh
-//       ) {
-//         newData = storedData.data;
-//         setLastUpdated(new Date(storedData.timestamp));
-//       } else {
-//         const sheetData = await fetchGoogleSheetData();
-//         const tpsDataFetched = await fetchAllTpsData(sheetData);
+  const raasOptions = [
+    "All Raas",
+    "Gelato",
+    "Conduit",
+    "Caldera",
+    "Altlayer",
+    "Alchemy",
+  ];
 
-//         newData = {
-//           gelatoChains: sheetData.filter(
-//             (chain) => chain.raas && chain.raas.toLowerCase() === "gelato"
-//           ),
-//           tpsData: tpsDataFetched,
-//         };
-//         await saveData("tpsData", newData);
-//         setLastUpdated(new Date());
-//       }
+  const timeRangeOptions = {
+    Daily: ["90 days", "180 days", "1 Year", "All"],
+    Monthly: ["3 Months", "6 Months", "1 Year", "All"],
+  };
 
-//       setGelatoChains(newData.gelatoChains);
-//       setTpsData(newData.tpsData);
-//     } catch (error) {
-//       console.error("Error during data fetching:", error);
-//       setError("Failed to load data. Please try again later.");
-//     } finally {
-//       setLoading(false);
-//     }
-//   }, []);
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        // Uncomment the following line if you need to clear IndexedDB
+        // await clearAllData(); // Clear all data in IndexedDB
 
-//   useEffect(() => {
-//     fetchData();
-//   }, [fetchData]);
+        const storedRecord = await getData(TPS_DATA_ID);
 
-//   useEffect(() => {
-//     if (Object.keys(tpsData).length > 0) {
-//       populateChartData(tpsData);
-//     }
-//   }, [tpsData, timeRange]);
+        const sixHoursAgo = Date.now() - SIX_HOURS_IN_MS;
 
-//   const handleTimeRangeChange = (range) => {
-//     setTimeRange(range);
-//   };
+        if (storedRecord && storedRecord.timestamp > sixHoursAgo) {
+          // Use stored data if it's less than 6 hours old
+          populateStateWithData(storedRecord.data);
+          setLoading(false);
+          return;
+        }
 
-//   const handleRefreshData = async () => {
-//     await clearAllData();
-//     fetchData(true);
-//   };
+        // Fetch new data if no valid stored data is available
+        const sheetData = await fetchGoogleSheetData();
+        const tpsDataFetched = await fetchAllTpsData(sheetData);
 
-//   const filterDataByTimeRange = useCallback(
-//     (data) => {
-//       const now = moment();
-//       let startDate;
+        const newData = {
+          sheetData,
+          tpsDataFetched,
+        };
 
-//       switch (timeRange) {
-//         case "Daily":
-//           startDate = now.clone().startOf("day");
-//           break;
-//         case "Monthly":
-//           startDate = now.clone().subtract(1, "month");
-//           break;
-//         case "FourMonths":
-//           startDate = now.clone().subtract(4, "months");
-//           break;
-//         case "SixMonths":
-//           startDate = now.clone().subtract(6, "months");
-//           break;
-//         case "All":
-//         default:
-//           startDate = moment(0);
-//       }
+        // Save new data to IndexedDB
+        await saveData(TPS_DATA_ID, newData);
 
-//       return data.filter((item) =>
-//         moment(item.timestamp * 1000).isAfter(startDate)
-//       );
-//     },
-//     [timeRange]
-//   );
+        populateStateWithData(newData);
+      } catch (error) {
+        console.error("Error during data fetching:", error);
+        setError("Failed to load TPS data. Please try again later.");
+      } finally {
+        setLoading(false);
+      }
+    };
 
-//   const populateChartData = useCallback(
-//     (allTpsData) => {
-//       const chainAverages = Object.entries(allTpsData).map(
-//         ([chainName, tpsArray]) => {
-//           const filteredData = filterDataByTimeRange(tpsArray);
-//           const averageTps =
-//             filteredData.reduce((sum, item) => sum + item.tps, 0) /
-//               filteredData.length || 0;
-//           return { chainName, averageTps };
-//         }
-//       );
+    fetchData();
+  }, []);
 
-//       const topChains = chainAverages
-//         .sort((a, b) => b.averageTps - a.averageTps)
-//         .slice(0, 10)
-//         .map((item) => item.chainName);
+  useEffect(() => {
+    if (allChains.length && Object.keys(tpsDataByChainDate).length) {
+      updateChartData();
+      updateTableData();
+    }
+  }, [
+    allChains,
+    tpsDataByChainDate,
+    timeUnit,
+    timeRange,
+    selectedRaas,
+    chartType,
+  ]);
 
-//       const datasets = [];
-//       let labelsSet = new Set();
+  const populateStateWithData = (data) => {
+    const { sheetData, tpsDataFetched } = data;
 
-//       topChains.forEach((chainName) => {
-//         const tpsArray = allTpsData[chainName];
-//         const filteredData = filterDataByTimeRange(tpsArray);
-//         const data = filteredData.map((item) => ({
-//           x: new Date(item.timestamp * 1000),
-//           y: item.tps,
-//         }));
+    // Filter chains with status "Mainnet" and have a projectId
+    const mainnetChains = sheetData.filter(
+      (chain) =>
+        chain.status &&
+        chain.status.trim().toLowerCase() === "mainnet" &&
+        chain.projectId // Ensure projectId is present
+    );
 
-//         data.forEach((item) => labelsSet.add(item.x.getTime()));
+    setAllChains(mainnetChains);
+    setTpsDataByChainDate(tpsDataFetched.tpsDataByChainDate);
 
-//         datasets.push({
-//           label: chainName,
-//           data: data,
-//           borderColor: getColorForChain(chainName),
-//           fill: false,
-//           tension: 0.1,
-//         });
-//       });
+    // Calculate TPS by RaaS
+    const raasTps = {};
+    mainnetChains.forEach((chain) => {
+      const { raas, name } = chain;
+      const chainTpsData = tpsDataFetched.tpsDataByChainDate[name];
 
-//       const labels = Array.from(labelsSet)
-//         .sort((a, b) => a - b)
-//         .map((timestamp) => new Date(timestamp));
+      if (chainTpsData) {
+        const totalChainTps = Object.values(chainTpsData).reduce(
+          (acc, val) => acc + val,
+          0
+        );
 
-//       setChartData({
-//         labels: labels,
-//         datasets: datasets,
-//       });
-//     },
-//     [filterDataByTimeRange]
-//   );
+        if (!raasTps[raas]) {
+          raasTps[raas] = 0;
+        }
+        raasTps[raas] += totalChainTps;
+      }
+    });
 
-//   const getColorForChain = useCallback((chainName) => {
-//     const colors = [
-//       "#FF6384",
-//       "#36A2EB",
-//       "#FFCE56",
-//       "#4BC0C0",
-//       "#9966FF",
-//       "#FF9F40",
-//       "#C9CBCF",
-//       "#E7E9ED",
-//       "#EC6731",
-//       "#B28AFE",
-//     ];
-//     let hash = 0;
-//     for (let i = 0; i < chainName.length; i++) {
-//       hash = chainName.charCodeAt(i) + ((hash << 5) - hash);
-//     }
-//     const colorIndex = Math.abs(hash) % colors.length;
-//     return colors[colorIndex];
-//   }, []);
+    setTpsByRaas(raasTps);
+  };
 
-//   const abbreviateNumber = useCallback((num) => {
-//     if (num === undefined || num === null || isNaN(num)) return "0";
-//     if (num === 0) return "0";
+  const updateChartData = () => {
+    // Filter chains based on selected RaaS
+    const filteredChains =
+      selectedRaas === "All Raas"
+        ? allChains
+        : allChains.filter(
+            (chain) =>
+              chain.raas &&
+              chain.raas.toLowerCase() === selectedRaas.toLowerCase()
+          );
 
-//     const absNum = Math.abs(num);
-//     const sign = Math.sign(num);
+    // Aggregate data based on the selected time range and unit
+    const dates = getFilteredDates();
 
-//     const suffixes = ["", "k", "M", "B", "T"];
-//     let suffixIndex = 0;
-//     let shortNumber = absNum;
+    // Prepare labels and datasets
+    let labels = [];
+    const datasets = [];
 
-//     while (shortNumber >= 1000 && suffixIndex < suffixes.length - 1) {
-//       shortNumber /= 1000;
-//       suffixIndex++;
-//     }
+    if (timeUnit === "Daily") {
+      labels = dates.map((date) => moment(date).format("D MMM YYYY"));
+    } else {
+      const months = getMonthlyLabels(dates);
+      labels = months.map((month) =>
+        moment(month, "YYYY-MM").format("MMM YYYY")
+      );
+    }
 
-//     if (shortNumber < 1) {
-//       return (sign * absNum).toFixed(4);
-//     }
+    const chainAverages = filteredChains.map((chain) => {
+      const tpsCounts = dates.map(
+        (date) => tpsDataByChainDate[chain.name]?.[date] || 0
+      );
+      const total = tpsCounts.reduce((acc, val) => acc + val, 0);
+      const average = total / tpsCounts.length || 0;
+      return { name: chain.name, average };
+    });
 
-//     shortNumber = parseFloat(shortNumber.toPrecision(3));
-//     return sign * shortNumber + suffixes[suffixIndex];
-//   }, []);
+    chainAverages.sort((a, b) => b.average - a.average);
+    const topChainsList = chainAverages.slice(0, 10);
+    setTopChainsList(topChainsList);
+    const topChainsNames = topChainsList.map((chain) => chain.name);
 
-//   // Memoize chainRows to prevent unnecessary re-computation
-//   const chainRows = useMemo(() => {
-//     return gelatoChains.map((chain) => {
-//       const chainName = chain.name;
-//       const chainTpsData = tpsData[chainName] || [];
-//       const latestTps =
-//         chainTpsData.length > 0
-//           ? chainTpsData[chainTpsData.length - 1]?.tps || 0
-//           : 0;
-//       const maxTps =
-//         chainTpsData.length > 0
-//           ? Math.max(...chainTpsData.map((data) => data.tps || 0), 0)
-//           : 0;
-//       return {
-//         id: chain.id,
-//         chainName: chain.name,
-//         blockScoutUrl: chain.blockScoutUrl,
-//         vertical: chain.vertical,
-//         latestTps,
-//         maxTps,
-//       };
-//     });
-//   }, [gelatoChains, tpsData]);
+    const totalTpsByDate = {};
 
-//   if (loading) {
-//     return <div className="loading">Loading TPS Data...</div>;
-//   }
+    topChainsNames.forEach((chainName) => {
+      const chainData = [];
+      if (timeUnit === "Daily") {
+        dates.forEach((date, idx) => {
+          const value = tpsDataByChainDate[chainName]?.[date] || 0;
+          chainData.push(value);
 
-//   return (
-//     <div className="tps-page">
-//       <Sidebar />
-//       <div className="main-content">
-//         <div className="transactions-header">
-//           <div className="heading-container">
-//             <FontAwesomeIcon icon={faTachometerAlt} className="icon" />
-//             <h2>Transactions Per Second</h2>
-//           </div>
-//           <p className="description">Tracks TPS data for the top 10 chains.</p>
-//           {lastUpdated && (
-//             <p className="last-updated">
-//               Last updated: {moment(lastUpdated).format("YYYY-MM-DD HH:mm")}
-//             </p>
-//           )}
-//           <button className="refresh-button" onClick={handleRefreshData}>
-//             Refresh Data
-//           </button>
-//         </div>
+          // Aggregate total TPS
+          totalTpsByDate[date] = (totalTpsByDate[date] || 0) + value;
+        });
+      } else {
+        const monthlyData = aggregateMonthlyData(
+          tpsDataByChainDate[chainName] || {},
+          dates
+        );
+        const months = getMonthlyLabels(dates);
+        months.forEach((month) => {
+          const value = monthlyData[month] || 0;
+          chainData.push(value);
 
-//         {error && <div className="error-message">{error}</div>}
+          // Aggregate total TPS
+          totalTpsByDate[month] = (totalTpsByDate[month] || 0) + value;
+        });
+      }
 
-//         <div className="time-range-selector">
-//           <div className="left-buttons">
-//             <button
-//               className={timeRange === "Daily" ? "active" : ""}
-//               onClick={() => handleTimeRangeChange("Daily")}
-//             >
-//               Daily
-//             </button>
-//             <button
-//               className={timeRange === "Monthly" ? "active" : ""}
-//               onClick={() => handleTimeRangeChange("Monthly")}
-//             >
-//               Monthly
-//             </button>
-//           </div>
-//           <div className="right-buttons">
-//             <button
-//               className={timeRange === "FourMonths" ? "active" : ""}
-//               onClick={() => handleTimeRangeChange("FourMonths")}
-//             >
-//               4 Months
-//             </button>
-//             <button
-//               className={timeRange === "SixMonths" ? "active" : ""}
-//               onClick={() => handleTimeRangeChange("SixMonths")}
-//             >
-//               6 Months
-//             </button>
-//             <button
-//               className={timeRange === "All" ? "active" : ""}
-//               onClick={() => handleTimeRangeChange("All")}
-//             >
-//               All
-//             </button>
-//           </div>
-//         </div>
+      datasets.push({
+        label: chainName,
+        data: chainData,
+        fill: chartType === "stacked" ? true : false,
+        borderColor: getColorForChain(chainName),
+        backgroundColor: getColorForChain(chainName),
+        tension: 0.1,
+      });
+    });
 
-//         <div className="table-chart-container">
-//           <div className="chain-list">
-//             <table>
-//               <thead>
-//                 <tr>
-//                   <th></th>
-//                   <th>Chain</th>
-//                   <th>Current TPS</th>
-//                   <th>Max TPS</th>
-//                   <th>Vertical</th>
-//                 </tr>
-//               </thead>
-//               <tbody>
-//                 {chainRows.length > 0 ? (
-//                   chainRows.map((row) => (
-//                     <TableRow
-//                       key={row.id}
-//                       blockScoutUrl={row.blockScoutUrl}
-//                       chainName={row.chainName}
-//                       latestTps={row.latestTps}
-//                       maxTps={row.maxTps}
-//                       vertical={row.vertical}
-//                       abbreviateNumber={abbreviateNumber}
-//                     />
-//                   ))
-//                 ) : (
-//                   <tr>
-//                     <td colSpan={5} style={{ textAlign: "center" }}>
-//                       No data available.
-//                     </td>
-//                   </tr>
-//                 )}
-//               </tbody>
-//             </table>
-//           </div>
+    // Adjust datasets for percentage chart
+    if (chartType === "percentage") {
+      datasets.forEach((dataset) => {
+        dataset.data = dataset.data.map((value, idx) => {
+          const dateKey =
+            timeUnit === "Daily" ? dates[idx] : getMonthlyLabels(dates)[idx];
+          const total = totalTpsByDate[dateKey] || 1;
+          return ((value / total) * 100).toFixed(2);
+        });
+      });
+    }
 
-//           <div className="line-chart">
-//             {chartData ? (
-//               <Line
-//                 data={chartData}
-//                 options={{
-//                   responsive: true,
-//                   plugins: {
-//                     legend: {
-//                       position: "bottom",
-//                       labels: {
-//                         color: "#FFFFFF",
-//                       },
-//                     },
-//                     title: {
-//                       display: true,
-//                       text: "TPS Data for Top 10 Chains",
-//                       color: "#FFFFFF",
-//                     },
-//                     tooltip: {
-//                       callbacks: {
-//                         label: function (context) {
-//                           const value = context.parsed.y || 0;
-//                           return `${context.dataset.label}: ${abbreviateNumber(
-//                             value
-//                           )}`;
-//                         },
-//                       },
-//                       backgroundColor: "rgba(0,0,0,0.7)",
-//                       titleColor: "#FFFFFF",
-//                       bodyColor: "#FFFFFF",
-//                     },
-//                   },
-//                   scales: {
-//                     x: {
-//                       type: "time",
-//                       time: {
-//                         unit: "month",
-//                         displayFormats: {
-//                           month: "MMM YYYY",
-//                         },
-//                       },
-//                       title: {
-//                         display: true,
-//                         text: "Month",
-//                         color: "#FFFFFF",
-//                       },
-//                       ticks: {
-//                         color: "#FFFFFF",
-//                       },
-//                     },
-//                     y: {
-//                       title: {
-//                         display: true,
-//                         text: "TPS",
-//                         color: "#FFFFFF",
-//                       },
-//                       ticks: {
-//                         color: "#FFFFFF",
-//                         beginAtZero: true,
-//                         callback: function (value) {
-//                           return abbreviateNumber(value);
-//                         },
-//                       },
-//                     },
-//                   },
-//                 }}
-//                 height={120} // Increased height
-//               />
-//             ) : (
-//               <div className="chart-placeholder">No data available</div>
-//             )}
-//           </div>
-//         </div>
-//       </div>
-//     </div>
-//   );
-// };
+    setChartData({
+      labels,
+      datasets,
+    });
+  };
 
-// const TableRow = React.memo(
-//   ({
-//     blockScoutUrl,
-//     chainName,
-//     latestTps,
-//     maxTps,
-//     vertical,
-//     abbreviateNumber,
-//   }) => {
-//     return (
-//       <tr>
-//         <td>
-//           <img
-//             src={`https://s2.googleusercontent.com/s2/favicons?domain=${blockScoutUrl}&sz=32`}
-//             alt={`${chainName} Logo`}
-//             className="chain-logo"
-//             onError={(e) => {
-//               e.target.onerror = null;
-//               e.target.src =
-//                 "https://cdn-icons-png.flaticon.com/512/2815/2815428.png"; // Use a valid placeholder image path
-//             }}
-//           />
-//         </td>
-//         <td>{chainName}</td>
-//         <td>{abbreviateNumber(latestTps)} TPS</td>
-//         <td>{abbreviateNumber(maxTps)} TPS</td>
-//         <td>{vertical || "N/A"}</td>
-//       </tr>
-//     );
-//   },
-//   (prevProps, nextProps) => {
-//     // Custom comparison function to prevent re-renders if props haven't changed
-//     return (
-//       prevProps.chainName === nextProps.chainName &&
-//       prevProps.latestTps === nextProps.latestTps &&
-//       prevProps.maxTps === nextProps.maxTps &&
-//       prevProps.vertical === nextProps.vertical &&
-//       prevProps.blockScoutUrl === nextProps.blockScoutUrl
-//     );
-//   }
-// );
+  const getFilteredDates = () => {
+    const today = moment().format("YYYY-MM-DD");
+    let startDate;
+    let dateDifference;
 
-// export default TpssPage;
+    switch (timeRange) {
+      case "90 days":
+        dateDifference = 90;
+        break;
+      case "180 days":
+        dateDifference = 180;
+        break;
+      case "1 Year":
+        dateDifference = 365;
+        break;
+      case "3 Months":
+        dateDifference = 90;
+        break;
+      case "6 Months":
+        dateDifference = 180;
+        break;
+      case "All":
+        // Find the earliest date in tpsDataByChainDate
+        const allDates = Object.values(tpsDataByChainDate)
+          .flatMap((chainData) => Object.keys(chainData))
+          .map((dateStr) => moment(dateStr, "YYYY-MM-DD"));
+        if (allDates.length > 0) {
+          startDate = moment.min(allDates).format("YYYY-MM-DD");
+        } else {
+          startDate = moment().subtract(1, "year").format("YYYY-MM-DD"); // default to 1 year ago
+        }
+        break;
+      default:
+        dateDifference = 90;
+    }
 
-import React from "react";
+    if (dateDifference) {
+      startDate = moment()
+        .subtract(dateDifference, "days")
+        .format("YYYY-MM-DD");
+    }
 
-function abc() {
-  return <div>j</div>;
-}
+    const dates = [];
+    let currentDate = moment(startDate);
+    while (currentDate.isSameOrBefore(today, "day")) {
+      dates.push(currentDate.format("YYYY-MM-DD"));
+      currentDate.add(1, "day");
+    }
+    return dates;
+  };
 
-export default abc;
+  const getMonthlyLabels = (dates) => {
+    const months = new Set();
+    dates.forEach((date) => {
+      months.add(moment(date).format("YYYY-MM"));
+    });
+    const sortedMonths = Array.from(months).sort((a, b) =>
+      moment(a).diff(moment(b))
+    );
+    return sortedMonths;
+  };
+
+  const aggregateMonthlyData = (chainData, dates) => {
+    const monthlyData = {};
+    dates.forEach((date) => {
+      const monthKey = moment(date).format("YYYY-MM");
+      if (!monthlyData[monthKey]) {
+        monthlyData[monthKey] = 0;
+      }
+      monthlyData[monthKey] += chainData[date] || 0;
+    });
+    return monthlyData;
+  };
+
+  const updateTableData = () => {
+    const today = moment().format("YYYY-MM-DD");
+    const yesterday = moment().subtract(1, "day").format("YYYY-MM-DD");
+
+    const tableData = [];
+
+    // Get the filtered chains based on RaaS selection
+    const filteredChains =
+      selectedRaas === "All Raas"
+        ? allChains
+        : allChains.filter(
+            (chain) =>
+              chain.raas &&
+              chain.raas.toLowerCase() === selectedRaas.toLowerCase()
+          );
+
+    // For each chain, compute the required data
+    filteredChains.forEach((chain) => {
+      const chainName = chain.name;
+      const chainLogo = chain.logoUrl || "";
+      const chainVertical = chain.vertical || "N/A";
+      const chainRaas = chain.raas || "N/A";
+      const chainPurpose = chain.purpose || "N/A"; // Assuming 'purpose' field
+
+      const chainTpsData = tpsDataByChainDate[chainName] || {};
+
+      // Current TPS (latest available date)
+      const currentTps = chainTpsData[yesterday] || chainTpsData[today] || 0;
+
+      // Max TPS
+      const maxTps = Math.max(...Object.values(chainTpsData), 0);
+
+      tableData.push({
+        chainName,
+        chainLogo,
+        chainVertical,
+        chainRaas,
+        chainPurpose,
+        currentTps,
+        maxTps,
+      });
+    });
+
+    // Sort on currentTps column
+    tableData.sort((a, b) => b.currentTps - a.currentTps);
+
+    // Take top 10 chains
+    const top10TableData = tableData.slice(0, 10);
+
+    setTableData(top10TableData);
+  };
+
+  // Event Handlers
+
+  const handleRaasChange = (event) => {
+    setSelectedRaas(event.target.value);
+  };
+
+  const handleTimeUnitChange = (unit) => {
+    setTimeUnit(unit);
+    // Update timeRange to default option when time unit changes
+    setTimeRange(timeRangeOptions[unit][0]);
+  };
+
+  const handleTimeRangeChange = (range) => {
+    setTimeRange(range);
+  };
+
+  const handleChartTypeChange = (type) => {
+    setChartType(type);
+  };
+
+  // Utility functions
+  const getColorForChain = (chainName) => {
+    const colorMap = {
+      Playnance: "#FF6384",
+      Anomaly: "#36A2EB",
+      "Aleph Zero": "#FFCE56",
+      Everclear: "#4BC0C0",
+      Fox: "#9966FF",
+      Ethernity: "#FF9F40",
+      Camp: "#C9CBCF",
+      Gameswift: "#E7E9ED",
+      "SX Network": "#36A2EB",
+      "Event Horizon": "#FF6384",
+      Arenaz: "#FFCE56",
+      "Edu Chain": "#4BC0C0",
+      Caldera: "#EC6731",
+      Other: "#999999",
+    };
+    return colorMap[chainName] || getRandomColor();
+  };
+
+  const getRandomColor = () => {
+    const letters = "0123456789ABCDEF";
+    let color = "#";
+    for (let i = 0; i < 6; i++) {
+      color += letters[Math.floor(Math.random() * 16)];
+    }
+    return color;
+  };
+
+  return (
+    <div className="tps-page">
+      <Sidebar />
+      <div className="main-content">
+        {/* Header */}
+        <div className="transactions-header">
+          <div className="heading-container">
+            <FontAwesomeIcon icon={faTachometerAlt} className="icon" />
+            <div>
+              <h2>Transactions Per Second</h2>
+              <p className="description">
+                Tracks the TPS data for the top 10 chains
+              </p>
+            </div>
+          </div>
+
+          {/* RaaS Selection Dropdown */}
+          <div className="raas-dropdown">
+            <select value={selectedRaas} onChange={handleRaasChange}>
+              {raasOptions.map((raas) => (
+                <option key={raas} value={raas}>
+                  {raas}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        {/* Error Message */}
+        {error && <div className="error-message">{error}</div>}
+
+        {/* Loading Indicator */}
+        {loading && <div className="loading">Loading data...</div>}
+
+        {/* Time Range Selector */}
+        {!loading && (
+          <>
+            <div className="time-range-selector">
+              <div className="time-range-left">
+                <button
+                  className={timeUnit === "Daily" ? "active" : ""}
+                  onClick={() => handleTimeUnitChange("Daily")}
+                >
+                  Daily
+                </button>
+                <button
+                  className={timeUnit === "Monthly" ? "active" : ""}
+                  onClick={() => handleTimeUnitChange("Monthly")}
+                >
+                  Monthly
+                </button>
+              </div>
+              <div className="time-range-right">
+                {timeRangeOptions[timeUnit].map((range) => (
+                  <button
+                    key={range}
+                    className={timeRange === range ? "active" : ""}
+                    onClick={() => handleTimeRangeChange(range)}
+                  >
+                    {range}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Chart Type Selector */}
+            <div className="chart-type-selector">
+              <span
+                className={chartType === "absolute" ? "active" : ""}
+                onClick={() => handleChartTypeChange("absolute")}
+              >
+                Absolute
+              </span>
+              <span
+                className={chartType === "stacked" ? "active" : ""}
+                onClick={() => handleChartTypeChange("stacked")}
+              >
+                Stacked
+              </span>
+              <span
+                className={chartType === "percentage" ? "active" : ""}
+                onClick={() => handleChartTypeChange("percentage")}
+              >
+                Percentage
+              </span>
+            </div>
+          </>
+        )}
+
+        {/* Line Chart Section */}
+        {!loading && chartData && (
+          <div className="line-chart-container">
+            <Line
+              data={chartData}
+              options={{
+                responsive: true,
+                interaction: {
+                  mode: "index",
+                  intersect: false,
+                },
+                plugins: {
+                  legend: {
+                    position: "bottom",
+                    labels: {
+                      color: "#FFFFFF",
+                    },
+                  },
+                  title: {
+                    display: true,
+                    text: `TPS - ${timeRange}`,
+                    color: "#FFFFFF",
+                  },
+                  tooltip: {
+                    mode: "index",
+                    intersect: false,
+                    callbacks: {
+                      title: function (context) {
+                        let dateLabel = context[0].label;
+                        return dateLabel;
+                      },
+                      label: function (context) {
+                        let label = context.dataset.label || "";
+                        let value = context.parsed.y;
+                        if (chartType === "percentage") {
+                          value = value + "%";
+                        } else {
+                          value = abbreviateNumber(value);
+                        }
+                        return `${label}: ${value}`;
+                      },
+                    },
+                    backgroundColor: "rgba(0,0,0,0.7)",
+                    titleColor: "#FFFFFF",
+                    bodyColor: "#FFFFFF",
+                  },
+                },
+                scales: {
+                  x: {
+                    type: "time",
+                    time: {
+                      unit: timeUnit === "Daily" ? "day" : "month",
+                      displayFormats: {
+                        day: "D MMM YYYY",
+                        month: "MMM YYYY",
+                      },
+                    },
+                    title: {
+                      display: true,
+                      text: timeUnit === "Daily" ? "Date" : "Month",
+                      color: "#FFFFFF",
+                    },
+                    ticks: {
+                      color: "#FFFFFF",
+                      maxRotation: 45,
+                      minRotation: 0,
+                      autoSkip: true,
+                      maxTicksLimit: 10,
+                    },
+                  },
+                  y: {
+                    stacked:
+                      chartType === "stacked" || chartType === "percentage",
+                    max: chartType === "percentage" ? 100 : undefined,
+                    title: {
+                      display: true,
+                      text:
+                        chartType === "percentage"
+                          ? "Percentage of Total TPS (%)"
+                          : "Transactions Per Second",
+                      color: "#FFFFFF",
+                    },
+                    ticks: {
+                      color: "#FFFFFF",
+                      beginAtZero: true,
+                      callback: function (value) {
+                        return chartType === "percentage"
+                          ? value + "%"
+                          : abbreviateNumber(value);
+                      },
+                    },
+                  },
+                },
+                elements: {
+                  point: {
+                    radius: 0,
+                  },
+                },
+              }}
+            />
+          </div>
+        )}
+
+        {/* Table Section */}
+        {!loading && (
+          <div className="table-section">
+            <h3 className="section-title">Top 10 Chains</h3>
+            <div className="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Chain</th>
+                    <th>Current TPS</th>
+                    <th>Max TPS</th>
+                    <th>Vertical</th>
+                    <th>Purpose</th>
+                    <th>RaaS Provider</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tableData.map((chain) => (
+                    <tr key={chain.chainName}>
+                      <td className="chain-name-cell">
+                        <img
+                          src={chain.chainLogo}
+                          alt={chain.chainName}
+                          className="chain-logo"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src =
+                              "https://www.helika.io/wp-content/uploads/2023/09/proofofplay_logo.png";
+                          }}
+                        />
+                        <span>{chain.chainName}</span>
+                      </td>
+                      <td>{formatNumber(chain.currentTps)}</td>
+                      <td>{formatNumber(chain.maxTps)}</td>
+                      <td>{chain.chainVertical}</td>
+                      <td>{chain.chainPurpose}</td>
+                      <td>{chain.chainRaas}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default TpssPage;
