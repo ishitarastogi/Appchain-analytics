@@ -321,3 +321,110 @@ export const fetchAllTransactions = async (sheetData) => {
     totalTransactionsCombined,
   };
 };
+
+// Fetch TVL Data for a single chain using l2beat API
+export const fetchTvlData = async (projectId) => {
+  const inputParam = encodeURIComponent(
+    JSON.stringify({
+      0: {
+        json: {
+          filter: {
+            type: "projects",
+            projectIds: [projectId],
+          },
+          range: "max",
+          excludeAssociatedTokens: false,
+        },
+      },
+    })
+  );
+
+  const baseUrl = `https://l2beat.com/api/trpc/tvl.chart?batch=1&input=${inputParam}`;
+
+  // Proxy server logic
+  const isDevelopment =
+    !process.env.NODE_ENV || process.env.NODE_ENV === "development";
+  const proxyBaseUrl = isDevelopment
+    ? "http://localhost:3000/api/proxy?url="
+    : "/api/proxy?url=";
+
+  try {
+    const fullUrl = `${proxyBaseUrl}${encodeURIComponent(baseUrl)}`;
+    const response = await axios.get(fullUrl);
+    console.log(`Proxy response for ${projectId}:`, response.data);
+
+    // Check if response contains the expected structure
+    if (
+      !response.data ||
+      !response.data[0] ||
+      !response.data[0].result ||
+      !response.data[0].result.data ||
+      !response.data[0].result.data.json
+    ) {
+      throw new Error(
+        `Invalid response structure from the proxy for ${projectId}`
+      );
+    }
+
+    const data = response.data[0].result.data.json;
+
+    // Process the TVL data
+    // Data is an array of arrays: [[timestamp, native, canonical, external, ...], ...]
+    const tvlData = data.map((entry) => {
+      const timestamp = entry[0]; // First element is the timestamp
+      const nativeTvl = entry[1] / 1e8; // Second element divided by 100,000,000
+      const canonical = entry[2] / 1e8; // Third element divided by 100,000,000
+      const external = entry[3] / 1e8; // Fourth element divided by 100,000,000
+      const totalTvl = nativeTvl + canonical + external;
+      const date = moment.unix(timestamp).format("YYYY-MM-DD");
+      return {
+        date,
+        nativeTvl,
+        canonical,
+        external,
+        totalTvl,
+      };
+    });
+
+    return tvlData;
+  } catch (error) {
+    console.error(`Error fetching TVL data for ${projectId}:`, error.message);
+    return []; // Return empty array on error
+  }
+};
+
+// Fetch TVL data across all chains and structure the data
+export const fetchAllTvlData = async (sheetData) => {
+  const tvlDataByChainDate = {};
+
+  // Create an array of promises to fetch data in parallel
+  const fetchPromises = sheetData
+    .filter((chain) => chain.projectId) // Ensure projectId is present
+    .map(async (chain) => {
+      const { name, projectId } = chain;
+      try {
+        const tvlData = await fetchTvlData(projectId);
+        // Aggregate data by date
+        const chainTvlByDate = {};
+        tvlData.forEach(
+          ({ date, nativeTvl, canonical, external, totalTvl }) => {
+            chainTvlByDate[date] = {
+              nativeTvl,
+              canonical,
+              external,
+              totalTvl,
+            };
+          }
+        );
+        tvlDataByChainDate[name] = chainTvlByDate;
+      } catch (error) {
+        console.error(`Error fetching TVL data for ${name}:`, error);
+      }
+    });
+
+  await Promise.all(fetchPromises);
+
+  return {
+    tvlDataByChainDate,
+  };
+};
