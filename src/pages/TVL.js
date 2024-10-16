@@ -75,7 +75,7 @@ const TvlPage = () => {
       setLoading(true);
       try {
         // Uncomment the following line if you need to clear IndexedDB
-        await clearAllData(); // Clear all data in IndexedDB
+        // await clearAllData(); // Clear all data in IndexedDB
 
         const storedRecord = await getData(TVL_DATA_ID);
 
@@ -510,7 +510,11 @@ const TvlPage = () => {
 
           {/* RaaS Selection Dropdown */}
           <div className="raas-dropdown">
-            <select value={selectedRaas} onChange={handleRaasChange}>
+            <select
+              value={selectedRaas}
+              onChange={handleRaasChange}
+              className="raas-select"
+            >
               {raasOptions.map((raas) => (
                 <option key={raas} value={raas}>
                   {raas}
@@ -522,35 +526,39 @@ const TvlPage = () => {
 
         {/* Time Range Selector */}
         {!loading && (
-          <>
-            <div className="time-range-selector">
-              <div className="time-range-left">
-                <button
-                  className={timeUnit === "Daily" ? "active" : ""}
-                  onClick={() => handleTimeUnitChange("Daily")}
-                >
-                  Daily
-                </button>
-                <button
-                  className={timeUnit === "Monthly" ? "active" : ""}
-                  onClick={() => handleTimeUnitChange("Monthly")}
-                >
-                  Monthly
-                </button>
-              </div>
-              <div className="time-range-right">
-                {timeRangeOptions[timeUnit].map((range) => (
-                  <button
-                    key={range}
-                    className={timeRange === range ? "active" : ""}
-                    onClick={() => handleTimeRangeChange(range)}
-                  >
-                    {range}
-                  </button>
-                ))}
-              </div>
+          <div className="time-range-selector">
+            <div className="time-range-left">
+              <button
+                className={`time-unit-btn ${
+                  timeUnit === "Daily" ? "active" : ""
+                }`}
+                onClick={() => handleTimeUnitChange("Daily")}
+              >
+                Daily
+              </button>
+              <button
+                className={`time-unit-btn ${
+                  timeUnit === "Monthly" ? "active" : ""
+                }`}
+                onClick={() => handleTimeUnitChange("Monthly")}
+              >
+                Monthly
+              </button>
             </div>
-          </>
+            <div className="time-range-right">
+              {timeRangeOptions[timeUnit].map((range) => (
+                <button
+                  key={range}
+                  className={`time-range-btn ${
+                    timeRange === range ? "active" : ""
+                  }`}
+                  onClick={() => handleTimeRangeChange(range)}
+                >
+                  {range}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
 
         {/* Error Message */}
@@ -581,6 +589,9 @@ const TvlPage = () => {
                     display: true,
                     text: `TVL - ${timeRange}`,
                     color: "#FFFFFF",
+                    font: {
+                      size: 18,
+                    },
                   },
                   tooltip: {
                     mode: "index",
@@ -616,6 +627,9 @@ const TvlPage = () => {
                       display: true,
                       text: timeUnit === "Daily" ? "Date" : "Month",
                       color: "#FFFFFF",
+                      font: {
+                        size: 14,
+                      },
                     },
                     ticks: {
                       color: "#FFFFFF",
@@ -630,6 +644,9 @@ const TvlPage = () => {
                       display: true,
                       text: "Total Value Locked (USD)",
                       color: "#FFFFFF",
+                      font: {
+                        size: 14,
+                      },
                     },
                     ticks: {
                       color: "#FFFFFF",
@@ -655,7 +672,7 @@ const TvlPage = () => {
           <div className="table-section">
             <h3 className="section-title">Top 10 Chains by TVL</h3>
             <div className="table-container">
-              <table>
+              <table className="tvl-table">
                 <thead>
                   <tr>
                     <th>Chain</th>
@@ -678,25 +695,21 @@ const TvlPage = () => {
                               "https://www.helika.io/wp-content/uploads/2023/09/proofofplay_logo.png";
                           }}
                         />
-                        <div>
-                          <span>{chain.chainName}</span>
-                          <div
-                            className="chain-subtext"
-                            style={{ color: "grey", fontSize: "12px" }}
-                          >
+                        <div className="chain-info">
+                          <span className="chain-name">{chain.chainName}</span>
+                          <div className="chain-subtext">
                             Framework: {chain.chainFramework}
                           </div>
-                          <div
-                            className="chain-subtext"
-                            style={{ color: "grey", fontSize: "12px" }}
-                          >
+                          <div className="chain-subtext">
                             DA: {chain.chainDa}
                           </div>
                         </div>
                       </td>
-                      <td>{chain.chainRaas}</td>
-                      <td>{chain.chainVertical}</td>
-                      <td>${formatTvlValue(chain.currentTvl)}</td>
+                      <td className="raas-provider">{chain.chainRaas}</td>
+                      <td className="vertical">{chain.chainVertical}</td>
+                      <td className="tvl-value">
+                        ${formatTvlValue(chain.currentTvl)}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -708,12 +721,18 @@ const TvlPage = () => {
         {/* Pie Charts Section */}
         {!loading && topChainsPieData && raasPieData && (
           <div className="pie-charts-section">
-            <div className="pie-chart-container">
+            <div className="pie-chart-wrapper">
               <h3 className="section-title">Top 10 Chains TVL Share</h3>
               <Pie
                 data={topChainsPieData}
                 options={{
                   plugins: {
+                    legend: {
+                      position: "right",
+                      labels: {
+                        color: "#FFFFFF",
+                      },
+                    },
                     tooltip: {
                       callbacks: {
                         label: function (context) {
@@ -734,12 +753,18 @@ const TvlPage = () => {
                 }}
               />
             </div>
-            <div className="pie-chart-container">
+            <div className="pie-chart-wrapper">
               <h3 className="section-title">RaaS Providers TVL Market Share</h3>
               <Pie
                 data={raasPieData}
                 options={{
                   plugins: {
+                    legend: {
+                      position: "right",
+                      labels: {
+                        color: "#FFFFFF",
+                      },
+                    },
                     tooltip: {
                       callbacks: {
                         label: function (context) {

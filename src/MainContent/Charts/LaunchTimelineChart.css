@@ -1,3 +1,5 @@
+/* src/components/LaunchTimelineChart.css */
+
 /* Section that holds both the heading and chart */
 .chart-section {
   margin-left: 25px;
@@ -30,11 +32,12 @@
 
 /* Time Range Buttons */
 .time-range-buttons {
-  /* Remove text-align since Flexbox handles alignment */
+  /* Flexbox handles alignment */
+  display: flex;
+  gap: 10px;
 }
 
 .time-range-buttons button {
-  margin-left: 5px;
   padding: 6px 12px;
   background-color: #333333;
   color: #ffffff;
@@ -42,6 +45,7 @@
   cursor: pointer;
   border-radius: 4px;
   font-size: 14px; /* Adjust as needed */
+  transition: background-color 0.3s;
 }
 
 .time-range-buttons button.active,

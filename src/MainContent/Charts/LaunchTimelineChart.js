@@ -12,7 +12,7 @@ import {
   Legend,
   TimeScale,
   CategoryScale,
-  Title, // Import the Title plugin from Chart.js
+  Title,
 } from "chart.js";
 
 ChartJS.register(
@@ -22,7 +22,7 @@ ChartJS.register(
   Legend,
   TimeScale,
   CategoryScale,
-  Title // Register the Title plugin
+  Title
 );
 
 const LaunchTimelineChart = () => {
@@ -37,20 +37,26 @@ const LaunchTimelineChart = () => {
     All: 365 * 5,
   };
 
+  // Function to capitalize the first letter
+  const capitalizeFirstLetter = (str) => {
+    if (!str) return "";
+    return str.charAt(0).toUpperCase() + str.slice(1);
+  };
+
+  const normalizeRaaS = (provider) => capitalizeFirstLetter(provider.trim());
+
   useEffect(() => {
     const fetchData = async () => {
       try {
         const data = await fetchGoogleSheetData();
 
         const raasColors = {
-          gelato: "#ff3b57",
-          conduit: "#46BDC6",
-          alchemy: "#4185F4",
-          caldera: "#EC6731",
-          altlayer: "#B28AFE",
+          Gelato: "#ff3b57",
+          Conduit: "#46BDC6",
+          Alchemy: "#4185F4",
+          Caldera: "#EC6731",
+          Altlayer: "#B28AFE",
         };
-
-        const normalizeRaaS = (provider) => provider.trim().toLowerCase();
 
         const now = new Date();
         const rangeDays = timeRanges[timeRange];
@@ -72,7 +78,7 @@ const LaunchTimelineChart = () => {
         const chartPoints = filteredData.map((chain, index) => ({
           x: jitterDate(chain.launchDate, index),
           y: normalizeRaaS(chain.raas),
-          color: raasColors[normalizeRaaS(chain.raas)],
+          color: raasColors[normalizeRaaS(chain.raas)] || "#ffffff", // Fallback color
           name: chain.name,
         }));
 
@@ -108,14 +114,36 @@ const LaunchTimelineChart = () => {
         title: {
           display: true,
           text: "Launch Date",
+          color: "#ffffff", // X-axis title color
+          font: {
+            size: 14,
+            weight: "bold",
+          },
+        },
+        ticks: {
+          color: "#ffffff", // X-axis labels color
+        },
+        grid: {
+          display: false, // Remove X-axis grid lines
         },
       },
       y: {
         type: "category",
-        labels: ["gelato", "conduit", "alchemy", "caldera", "altlayer"],
+        labels: ["Gelato", "Conduit", "Alchemy", "Caldera", "Altlayer"],
         title: {
           display: true,
           text: "RaaS Providers",
+          color: "#ffffff", // Y-axis title color
+          font: {
+            size: 14,
+            weight: "bold",
+          },
+        },
+        ticks: {
+          color: "#ffffff", // Y-axis labels color
+        },
+        grid: {
+          display: false, // Remove Y-axis grid lines
         },
       },
     },
@@ -124,11 +152,17 @@ const LaunchTimelineChart = () => {
         callbacks: {
           label: (context) => {
             const point = context.raw;
-            return `${point.name} (${point.y})`; // Fixed template literal
+            return `${point.name} (${point.y})`;
           },
         },
+        titleColor: "#ffffff", // Tooltip title color
+        bodyColor: "#ffffff", // Tooltip body color
+        backgroundColor: "rgba(0, 0, 0, 0.7)", // Tooltip background
       },
       legend: {
+        display: false,
+      },
+      title: {
         display: false,
       },
     },
@@ -139,7 +173,7 @@ const LaunchTimelineChart = () => {
       <div className="chart-container">
         {/* New Flex Container for Header */}
         <div className="chart-header">
-          <h2 className="metrics-heading">RaaS Launch Timeline chart </h2>
+          <h2 className="metrics-heading">RaaS Launch Timeline Chart</h2>
 
           <div className="time-range-buttons">
             {Object.keys(timeRanges).map((range) => (
