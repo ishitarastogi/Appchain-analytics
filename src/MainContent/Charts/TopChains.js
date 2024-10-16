@@ -69,14 +69,62 @@ const TopChains = () => {
     }
   }, [transactionData, chainDetails]);
 
+  // Function to aggregate weekly data into monthly data
+  const aggregateWeeklyToMonthly = (transactionsByChain) => {
+    const transactionsByChainMonth = {};
+    for (const chainName in transactionsByChain) {
+      transactionsByChainMonth[chainName] = {};
+      const chainData = transactionsByChain[chainName];
+      for (const weekKey in chainData) {
+        const weekMoment = moment(weekKey, "GGGG-[W]WW");
+        const weekStartDate = weekMoment.startOf("isoWeek");
+        const weekEndDate = weekMoment.endOf("isoWeek");
+
+        // Initialize a map to keep track of days per month
+        const daysPerMonth = {};
+
+        // For each day in the week
+        for (let i = 0; i < 7; i++) {
+          const currentDate = weekStartDate.clone().add(i, "days");
+          const monthKey = currentDate.format("YYYY-MM");
+          if (!daysPerMonth[monthKey]) {
+            daysPerMonth[monthKey] = 0;
+          }
+          daysPerMonth[monthKey] += 1;
+        }
+
+        // Total days in the week (should be 7)
+        const totalDays = 7;
+        const weekTransactions = chainData[weekKey];
+
+        // Assign transactions to months proportionally
+        for (const monthKey in daysPerMonth) {
+          const daysInMonth = daysPerMonth[monthKey];
+          const fraction = daysInMonth / totalDays;
+          const monthlyTransaction = weekTransactions * fraction;
+
+          if (!transactionsByChainMonth[chainName][monthKey]) {
+            transactionsByChainMonth[chainName][monthKey] = 0;
+          }
+          transactionsByChainMonth[chainName][monthKey] += monthlyTransaction;
+        }
+      }
+    }
+    return transactionsByChainMonth;
+  };
+
   const calculateTopChains = (
     transactionsByChain,
     totalTxCombined,
     chainDetails
   ) => {
-    const chainTotals = Object.entries(transactionsByChain).map(
-      ([chainName, weeks]) => {
-        const total = Object.values(weeks).reduce(
+    // Aggregate weekly data into monthly data
+    const transactionsByChainMonth =
+      aggregateWeeklyToMonthly(transactionsByChain);
+
+    const chainTotals = Object.entries(transactionsByChainMonth).map(
+      ([chainName, periods]) => {
+        const total = Object.values(periods).reduce(
           (sum, val) => sum + parseFloat(val),
           0
         );
@@ -98,32 +146,41 @@ const TopChains = () => {
       );
     }
 
-    const lastWeekKey = getLastWeekKey(transactionsByChain);
-    const previousWeekKey = getPreviousWeekKey(lastWeekKey);
+    const lastMonthKey = getLastMonthKey(transactionsByChainMonth);
+    const previousMonthKey = getPreviousMonthKey(lastMonthKey);
 
-    if (!previousWeekKey) {
-      console.error("Cannot determine previous week key.");
+    if (!previousMonthKey) {
+      console.error("Cannot determine previous month key.");
       setTopChains([]); // Or handle accordingly
       return;
     }
 
     const updatedTopChains = topSix.map((chain) => {
-      const currentWeekTx =
-        transactionsByChain[chain.chainName]?.[lastWeekKey] || 0;
-      const previousWeekTx =
-        transactionsByChain[chain.chainName]?.[previousWeekKey] || 0;
+      const chainMonthlyData = transactionsByChainMonth[chain.chainName] || {};
+
+      const currentMonthTx = chainMonthlyData[lastMonthKey] || 0;
+      const previousMonthTx = chainMonthlyData[previousMonthKey] || 0;
+
+      // Debugging statements
+      console.log(`Chain: ${chain.chainName}`);
+      console.log(`Transactions by Month:`, chainMonthlyData);
+      console.log(`Previous Month (${previousMonthKey}): ${previousMonthTx}`);
+      console.log(`Current Month (${lastMonthKey}): ${currentMonthTx}`);
 
       let percentageIncrease = "N/A";
-      if (previousWeekTx > 0) {
+      if (previousMonthTx > 0) {
         percentageIncrease =
-          (((currentWeekTx - previousWeekTx) / previousWeekTx) * 100).toFixed(
-            2
-          ) + "%";
-      } else if (previousWeekTx === 0 && currentWeekTx > 0) {
-        percentageIncrease = "No Previous Data"; // More informative than "∞%"
+          (
+            ((currentMonthTx - previousMonthTx) / previousMonthTx) *
+            100
+          ).toFixed(2) + "%";
+      } else if (previousMonthTx === 0 && currentMonthTx > 0) {
+        percentageIncrease = "N/A"; // Cannot calculate percentage increase from zero
       } else {
-        percentageIncrease = "No Data";
+        percentageIncrease = "0%";
       }
+
+      console.log(`Calculated Percentage Increase: ${percentageIncrease}`);
 
       let marketShare = "0%";
       if (calculatedTotalTxCombined > 0) {
@@ -154,29 +211,29 @@ const TopChains = () => {
     setTopChains(updatedTopChains);
   };
 
-  const getLastWeekKey = (transactionsByChain) => {
-    const firstChain = Object.keys(transactionsByChain)[0];
-    const allWeeks = Object.keys(transactionsByChain[firstChain]).sort(
-      (a, b) => {
-        return (
-          moment(a, "GGGG-[W]WW").toDate() - moment(b, "GGGG-[W]WW").toDate()
-        );
-      }
+  const getLastMonthKey = (transactionsByChainMonth) => {
+    const firstChain = Object.keys(transactionsByChainMonth)[0];
+    const allMonths = Object.keys(transactionsByChainMonth[firstChain]).filter(
+      (key) => moment(key, "YYYY-MM", true).isValid()
     );
-    const lastWeek = allWeeks[allWeeks.length - 1];
-    return lastWeek;
+
+    allMonths.sort((a, b) => {
+      return moment(a, "YYYY-MM").toDate() - moment(b, "YYYY-MM").toDate();
+    });
+
+    const lastMonth = allMonths[allMonths.length - 1];
+    return lastMonth;
   };
 
-  const getPreviousWeekKey = (lastWeekKey) => {
-    // Update the format to match "GGGG-[W]WW"
-    const lastWeekMoment = moment(lastWeekKey, "GGGG-[W]WW");
-    if (!lastWeekMoment.isValid()) {
-      console.error("Invalid lastWeekKey format:", lastWeekKey);
+  const getPreviousMonthKey = (lastMonthKey) => {
+    const lastMonthMoment = moment(lastMonthKey, "YYYY-MM");
+    if (!lastMonthMoment.isValid()) {
+      console.error("Invalid lastMonthKey format:", lastMonthKey);
       return null;
     }
-    const previousWeekMoment = lastWeekMoment.clone().subtract(1, "week");
-    const previousWeekKey = previousWeekMoment.format("GGGG-[W]WW");
-    return previousWeekKey;
+    const previousMonthMoment = lastMonthMoment.clone().subtract(1, "month");
+    const previousMonthKey = previousMonthMoment.format("YYYY-MM");
+    return previousMonthKey;
   };
 
   if (loading) {
@@ -206,13 +263,13 @@ const TopChains = () => {
             <div key={index} className="chain-card" tabIndex="0">
               <h3 className="chain-name">{chain.chainName}</h3>
               <p className="chain-transactions">
-                Total Transactions: {chain.total.toLocaleString()}
+                Total Transactions: {Math.round(chain.total).toLocaleString()}
               </p>
               <p className="chain-market-share">
                 Market Share: {chain.marketShare}
               </p>
               <p className="chain-percentage-increase">
-                % Increase Since Last Week: {chain.percentageIncrease}
+                % Increase Since Last Month: {chain.percentageIncrease}
               </p>
               <div className="chain-badges">
                 <Badge

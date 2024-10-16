@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faUsers, faSort } from "@fortawesome/free-solid-svg-icons";
-import "./ActiveAccountsPage.css";
+import "./DailyTransactionsPage.css";
 import {
   Chart as ChartJS,
   LineElement,
@@ -77,7 +77,7 @@ const ActiveAccountsPage = () => {
     const fetchData = async () => {
       setLoading(true);
       try {
-        // await clearAllData(); // Clear all data in IndexedDB
+        // await clearAllData(); // Clear all data in IndexedDB (Uncomment if needed)
 
         const storedRecord = await getData(ACTIVE_ACCOUNTS_DATA_ID);
 
@@ -148,14 +148,12 @@ const ActiveAccountsPage = () => {
     const raasActiveAccounts = {};
     chainsToUse.forEach((chain) => {
       const { raas, name } = chain;
-      const chainActiveAccounts =
-        activeAccountsData.activeAccountsByChainDate[name];
+      const chainActiveAccounts = activeAccountsByChainDate[name];
 
       if (chainActiveAccounts) {
         const totalChainActiveAccounts = Object.values(
           chainActiveAccounts
         ).reduce((acc, val) => acc + val, 0);
-
         if (!raasActiveAccounts[raas]) {
           raasActiveAccounts[raas] = 0;
         }
@@ -241,6 +239,10 @@ const ActiveAccountsPage = () => {
         fill: chartType === "stacked" ? true : false,
         borderColor: getColorForChain(chainName),
         backgroundColor: getColorForChain(chainName),
+        hoverBackgroundColor: getColorForChain(chainName), // Match background color
+        hoverBorderColor: getColorForChain(chainName), // Match border color
+        borderWidth: 1, // Consistent border width
+        hoverOffset: 0, // Prevent slice expansion on hover
         tension: 0.1,
       });
     });
@@ -371,8 +373,11 @@ const ActiveAccountsPage = () => {
     // For each chain, compute the required data
     filteredChains.forEach((chain) => {
       const chainName = chain.name;
-      const chainLogo = chain.logo || ""; // Use logo field
+      const chainLogo = chain.logoUrl || ""; // Corrected to use logoUrl
       const chainVertical = chain.vertical || "N/A";
+      const chainRaas = chain.raas || "N/A"; // Added RaaS property
+      const chainFramework = chain.framework || "N/A"; // Added Framework
+      const chainDA = chain.da || "N/A"; // Added DA
 
       const chainActiveAccounts = activeAccountsByChainDate[chainName] || {};
 
@@ -406,8 +411,11 @@ const ActiveAccountsPage = () => {
         chainName,
         chainLogo,
         chainVertical,
+        raas: chainRaas,
         dailyActiveAccounts,
         percentageIncrease30d,
+        framework: chainFramework, // Included Framework
+        DA: chainDA, // Included DA
       });
     });
 
@@ -526,8 +534,13 @@ const ActiveAccountsPage = () => {
       {
         data: raasData,
         backgroundColor: raasColors,
+        // Set hoverBackgroundColor to match backgroundColor
         hoverBackgroundColor: raasColors,
-        borderWidth: 0,
+        // Set hoverBorderColor to match borderColor
+        borderColor: "#FFFFFF",
+        hoverBorderColor: "#FFFFFF",
+        borderWidth: 1,
+        hoverOffset: 0,
       },
     ],
   };
@@ -549,16 +562,58 @@ const ActiveAccountsPage = () => {
         backgroundColor: topChainsLabels.map((label) =>
           getColorForChain(label)
         ),
+        // Set hoverBackgroundColor to match backgroundColor
         hoverBackgroundColor: topChainsLabels.map((label) =>
           getColorForChain(label)
         ),
-        borderWidth: 0,
+        // Set hoverBorderColor to match borderColor
+        borderColor: "#FFFFFF",
+        hoverBorderColor: "#FFFFFF",
+        borderWidth: 1,
+        hoverOffset: 0,
       },
     ],
   };
 
+  // Reusable function for pie chart options
+  const getPieChartOptions = () => ({
+    plugins: {
+      legend: {
+        position: "right",
+        labels: {
+          color: "#FFFFFF",
+        },
+      },
+      tooltip: {
+        callbacks: {
+          label: function (context) {
+            const label = context.label || "";
+            const value = context.parsed || 0;
+            const percentage = (
+              (value / totalActiveAccountsAllChains) *
+              100
+            ).toFixed(2);
+            const formattedValue = abbreviateNumber(value);
+            return `${label}: ${formattedValue} (${percentage}%)`;
+          },
+        },
+      },
+    },
+    // Disable hover animations
+    hover: {
+      mode: null,
+    },
+    animation: {
+      duration: 0, // Disable animations to prevent color changes
+    },
+    interaction: {
+      mode: "nearest",
+      intersect: false,
+    },
+  });
+
   return (
-    <div className="active-accounts-page">
+    <div className="performance-page">
       <Sidebar />
       <div className="main-content">
         {/* Header */}
@@ -746,6 +801,14 @@ const ActiveAccountsPage = () => {
                     radius: 0,
                   },
                 },
+                hover: {
+                  onHover: function (event, chartElement) {
+                    event.native.target.style.cursor = "default"; // Prevent pointer cursor
+                  },
+                },
+                animation: {
+                  duration: 0, // Disable animations to prevent color changes
+                },
               }}
             />
           </div>
@@ -766,6 +829,8 @@ const ActiveAccountsPage = () => {
                         <FontAwesomeIcon icon={faSort} />
                       </button>
                     </th>
+                    {/* New RaaS Column Header */}
+                    <th>RaaS</th>
                     <th>Vertical</th>
                     <th>30d %</th>
                   </tr>
@@ -781,13 +846,20 @@ const ActiveAccountsPage = () => {
                           onError={(e) => {
                             e.target.onerror = null;
                             e.target.src =
-                              "https://uploads.commoninja.com/searchengine/wordpress/fallback.png";
+                              "https://via.placeholder.com/40?text=No+Image"; // Updated fallback URL
                           }}
                         />
-                        {console.log(chain.chainLogo)}
-                        <span>{chain.chainName}</span>
+                        <div className="chain-name-details">
+                          <span className="chain-name">{chain.chainName}</span>
+                          <span className="chain-framework">
+                            Framework: {chain.framework}
+                          </span>
+                          <span className="chain-da">DA: {chain.DA}</span>
+                        </div>
                       </td>
                       <td>{formatNumber(chain.dailyActiveAccounts)}</td>
+                      {/* New RaaS Data Cell */}
+                      <td>{chain.raas}</td>
                       <td>{chain.chainVertical}</td>
                       <td
                         className={
@@ -814,67 +886,15 @@ const ActiveAccountsPage = () => {
               {/* Top Chains Pie Chart */}
               <div className="pie-chart-card">
                 <h4>Top 10 Chains Market Share</h4>
-                {topChainsData && (
-                  <Pie
-                    data={topChainsPieData}
-                    options={{
-                      plugins: {
-                        legend: {
-                          position: "right",
-                          labels: {
-                            color: "#FFFFFF",
-                          },
-                        },
-                        tooltip: {
-                          callbacks: {
-                            label: function (context) {
-                              const label = context.label || "";
-                              const value = context.parsed || 0;
-                              const percentage = (
-                                (value / totalActiveAccountsAllChains) *
-                                100
-                              ).toFixed(2);
-                              const formattedValue = abbreviateNumber(value);
-                              return `${label}: ${formattedValue} (${percentage}%)`;
-                            },
-                          },
-                        },
-                      },
-                    }}
-                  />
+                {topChainsPieData && (
+                  <Pie data={topChainsPieData} options={getPieChartOptions()} />
                 )}
               </div>
               {/* RaaS Pie Chart */}
               <div className="pie-chart-card">
                 <h4>RaaS Providers Market Share</h4>
-                {raasData && (
-                  <Pie
-                    data={raasPieData}
-                    options={{
-                      plugins: {
-                        legend: {
-                          position: "right",
-                          labels: {
-                            color: "#FFFFFF",
-                          },
-                        },
-                        tooltip: {
-                          callbacks: {
-                            label: function (context) {
-                              const label = context.label || "";
-                              const value = context.parsed || 0;
-                              const percentage = (
-                                (value / totalActiveAccountsAllChains) *
-                                100
-                              ).toFixed(2);
-                              const formattedValue = abbreviateNumber(value);
-                              return `${label}: ${formattedValue} (${percentage}%)`;
-                            },
-                          },
-                        },
-                      },
-                    }}
-                  />
+                {raasPieData && (
+                  <Pie data={raasPieData} options={getPieChartOptions()} />
                 )}
               </div>
             </div>

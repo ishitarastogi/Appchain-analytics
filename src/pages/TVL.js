@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChartLine } from "@fortawesome/free-solid-svg-icons";
-import "./TVL.css";
+import "./DailyTransactionsPage.css";
 import {
   Chart as ChartJS,
   LineElement,
@@ -493,7 +493,7 @@ const TvlPage = () => {
   };
 
   return (
-    <div className="tvl-page">
+    <div className="performance-page">
       <Sidebar />
       <div className="main-content">
         {/* Header */}
@@ -510,11 +510,7 @@ const TvlPage = () => {
 
           {/* RaaS Selection Dropdown */}
           <div className="raas-dropdown">
-            <select
-              value={selectedRaas}
-              onChange={handleRaasChange}
-              className="raas-select"
-            >
+            <select value={selectedRaas} onChange={handleRaasChange}>
               {raasOptions.map((raas) => (
                 <option key={raas} value={raas}>
                   {raas}
@@ -529,17 +525,13 @@ const TvlPage = () => {
           <div className="time-range-selector">
             <div className="time-range-left">
               <button
-                className={`time-unit-btn ${
-                  timeUnit === "Daily" ? "active" : ""
-                }`}
+                className={timeUnit === "Daily" ? "active" : ""}
                 onClick={() => handleTimeUnitChange("Daily")}
               >
                 Daily
               </button>
               <button
-                className={`time-unit-btn ${
-                  timeUnit === "Monthly" ? "active" : ""
-                }`}
+                className={timeUnit === "Monthly" ? "active" : ""}
                 onClick={() => handleTimeUnitChange("Monthly")}
               >
                 Monthly
@@ -549,9 +541,7 @@ const TvlPage = () => {
               {timeRangeOptions[timeUnit].map((range) => (
                 <button
                   key={range}
-                  className={`time-range-btn ${
-                    timeRange === range ? "active" : ""
-                  }`}
+                  className={timeRange === range ? "active" : ""}
                   onClick={() => handleTimeRangeChange(range)}
                 >
                   {range}
@@ -672,7 +662,7 @@ const TvlPage = () => {
           <div className="table-section">
             <h3 className="section-title">Top 10 Chains by TVL</h3>
             <div className="table-container">
-              <table className="tvl-table">
+              <table>
                 <thead>
                   <tr>
                     <th>Chain</th>
@@ -695,21 +685,17 @@ const TvlPage = () => {
                               "https://www.helika.io/wp-content/uploads/2023/09/proofofplay_logo.png";
                           }}
                         />
-                        <div className="chain-info">
+                        <div className="chain-name-details">
                           <span className="chain-name">{chain.chainName}</span>
-                          <div className="chain-subtext">
+                          <span className="chain-framework">
                             Framework: {chain.chainFramework}
-                          </div>
-                          <div className="chain-subtext">
-                            DA: {chain.chainDa}
-                          </div>
+                          </span>
+                          <span className="chain-da">DA: {chain.chainDa}</span>
                         </div>
                       </td>
-                      <td className="raas-provider">{chain.chainRaas}</td>
-                      <td className="vertical">{chain.chainVertical}</td>
-                      <td className="tvl-value">
-                        ${formatTvlValue(chain.currentTvl)}
-                      </td>
+                      <td>{chain.chainRaas}</td>
+                      <td>{chain.chainVertical}</td>
+                      <td>${formatTvlValue(chain.currentTvl)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -721,69 +707,76 @@ const TvlPage = () => {
         {/* Pie Charts Section */}
         {!loading && topChainsPieData && raasPieData && (
           <div className="pie-charts-section">
-            <div className="pie-chart-wrapper">
-              <h3 className="section-title">Top 10 Chains TVL Share</h3>
-              <Pie
-                data={topChainsPieData}
-                options={{
-                  plugins: {
-                    legend: {
-                      position: "right",
-                      labels: {
-                        color: "#FFFFFF",
+            <h3 className="section-title">Market Share</h3>
+            <div className="pie-charts-container">
+              <div className="pie-chart-card">
+                <h4>Top 10 Chains TVL Share</h4>
+                <Pie
+                  data={topChainsPieData}
+                  options={{
+                    plugins: {
+                      legend: {
+                        position: "right",
+                        labels: {
+                          color: "#FFFFFF",
+                        },
                       },
-                    },
-                    tooltip: {
-                      callbacks: {
-                        label: function (context) {
-                          const label = context.label || "";
-                          const value = context.parsed || 0;
-                          const total = context.dataset.data.reduce(
-                            (acc, val) => acc + val,
-                            0
-                          );
-                          const percentage = ((value / total) * 100).toFixed(2);
-                          return `${label}: $${formatTvlValue(
-                            value
-                          )} (${percentage}%)`;
+                      tooltip: {
+                        callbacks: {
+                          label: function (context) {
+                            const label = context.label || "";
+                            const value = context.parsed || 0;
+                            const total = context.dataset.data.reduce(
+                              (acc, val) => acc + val,
+                              0
+                            );
+                            const percentage = ((value / total) * 100).toFixed(
+                              2
+                            );
+                            return `${label}: $${formatTvlValue(
+                              value
+                            )} (${percentage}%)`;
+                          },
                         },
                       },
                     },
-                  },
-                }}
-              />
-            </div>
-            <div className="pie-chart-wrapper">
-              <h3 className="section-title">RaaS Providers TVL Market Share</h3>
-              <Pie
-                data={raasPieData}
-                options={{
-                  plugins: {
-                    legend: {
-                      position: "right",
-                      labels: {
-                        color: "#FFFFFF",
+                  }}
+                />
+              </div>
+              <div className="pie-chart-card">
+                <h4>RaaS Providers TVL Market Share</h4>
+                <Pie
+                  data={raasPieData}
+                  options={{
+                    plugins: {
+                      legend: {
+                        position: "right",
+                        labels: {
+                          color: "#FFFFFF",
+                        },
                       },
-                    },
-                    tooltip: {
-                      callbacks: {
-                        label: function (context) {
-                          const label = context.label || "";
-                          const value = context.parsed || 0;
-                          const total = context.dataset.data.reduce(
-                            (acc, val) => acc + val,
-                            0
-                          );
-                          const percentage = ((value / total) * 100).toFixed(2);
-                          return `${label}: $${formatTvlValue(
-                            value
-                          )} (${percentage}%)`;
+                      tooltip: {
+                        callbacks: {
+                          label: function (context) {
+                            const label = context.label || "";
+                            const value = context.parsed || 0;
+                            const total = context.dataset.data.reduce(
+                              (acc, val) => acc + val,
+                              0
+                            );
+                            const percentage = ((value / total) * 100).toFixed(
+                              2
+                            );
+                            return `${label}: $${formatTvlValue(
+                              value
+                            )} (${percentage}%)`;
+                          },
                         },
                       },
                     },
-                  },
-                }}
-              />
+                  }}
+                />
+              </div>
             </div>
           </div>
         )}

@@ -562,7 +562,7 @@ const DailyTransactionsPage = () => {
   };
 
   return (
-    <div className="daily-transactions-page">
+    <div className="performance-page">
       <Sidebar />
       <div className="main-content">
         {/* Header */}

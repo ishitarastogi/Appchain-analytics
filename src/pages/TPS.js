@@ -435,7 +435,7 @@ const TpssPage = () => {
   };
 
   return (
-    <div className="tps-page">
+    <div className="performance-page">
       <Sidebar />
       <div className="main-content">
         {/* Header */}

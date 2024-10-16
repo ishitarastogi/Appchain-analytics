@@ -4,7 +4,7 @@ import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
 import Home from "./pages/Home";
 import DailyTransactionsPage from "./pages/DailyTransactionsPage";
 import ActiveAccountsPage from "./pages/ActiveAccountsPage";
-import TPSPage from "./pages/abc"; // Import the new TPSPage component
+import TPSPage from "./pages/TPS"; // Import the new TPSPage component
 import TVLPage from "./pages/TVL";
 const App = () => {
   return (
