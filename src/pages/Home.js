@@ -4,6 +4,8 @@ import Sidebar from "../Sidebar/Sidebar";
 import LaunchTimelineChart from "../MainContent/Charts/LaunchTimelineChart";
 import TransactionMetrics from "../MainContent/Charts/TransactionMetrics";
 import TopChains from "../MainContent/Charts/TopChains";
+import { DataProvider } from "../MainContent/Charts/context/DataContext";
+
 import "./Home.css";
 
 const Home = () => {
@@ -14,8 +16,11 @@ const Home = () => {
         <Header />
         <div className="content-area">
           <LaunchTimelineChart />
-          <TransactionMetrics />
-          <TopChains />
+          <DataProvider>
+            <TransactionMetrics />
+            <TopChains />
+            {/* Add other components */}
+          </DataProvider>
         </div>
       </div>
     </div>

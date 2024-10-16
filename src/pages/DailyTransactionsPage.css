@@ -1,5 +1,6 @@
 /* src/pages/DailyTransactionsPage.css */
 
+/* Overall Page Styles */
 .daily-transactions-page {
   display: flex;
   background-color: #000; /* Black background */
@@ -9,7 +10,7 @@
   padding: 20px; /* Add some padding to the whole page */
 }
 
-/* Main content */
+/* Main Content Area */
 .main-content {
   margin-left: 240px; /* Offset by the sidebar width */
   padding: 20px;
@@ -170,11 +171,12 @@
   margin-bottom: 10px;
 }
 
-/* Table Styles */
+/* Table Container */
 .table-container {
   overflow-x: auto;
 }
 
+/* Table Styles */
 table {
   width: 100%;
   border-collapse: collapse;
@@ -204,9 +206,20 @@ th button {
   margin-left: 5px;
 }
 
-/* Remove alternating row colors */
 tr {
   background-color: transparent;
+}
+
+tr:hover {
+  background-color: #333333;
+}
+
+.positive {
+  color: #28a745; /* Green for positive percentage */
+}
+
+.negative {
+  color: #dc3545; /* Red for negative percentage */
 }
 
 /* Chain Name Cell */
@@ -222,13 +235,22 @@ tr {
   margin-right: 10px;
 }
 
-/* Positive and Negative percentage styles */
-.positive {
-  color: #28a745; /* Green for positive percentage */
+/* Chain Name Details */
+.chain-name-details {
+  display: flex;
+  flex-direction: column;
 }
 
-.negative {
-  color: #dc3545; /* Red for negative percentage */
+.chain-name {
+  font-weight: bold;
+  font-size: 1rem;
+  color: #ffffff;
+}
+
+.chain-framework,
+.chain-da {
+  font-size: 0.8rem;
+  color: #aaaaaa;
 }
 
 /* Pie Charts Section */
@@ -243,11 +265,12 @@ tr {
 }
 
 .pie-chart-card {
-  flex: 1 1 calc(35% - 20px);
+  flex: 1 1 calc(45% - 20px);
   background-color: #1c1c1c;
   padding: 15px;
   border-radius: 8px;
   min-width: 300px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
 }
 
 .pie-chart-card h4 {
@@ -261,8 +284,37 @@ tr {
   height: auto;
 }
 
-/* Adjustments for small screens */
-@media (max-width: 768px) {
+/* Loading and Error Styles */
+.loading {
+  text-align: center;
+  font-size: 1.2rem;
+  color: #ffffff;
+  margin-top: 20px;
+}
+
+.error-message {
+  text-align: center;
+  font-size: 1.2rem;
+  color: #ff3b57;
+  margin-top: 20px;
+}
+
+/* Sort Button */
+.table-container button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #ffffff;
+  padding: 0;
+  margin-left: 5px;
+}
+
+.table-container button:hover {
+  color: #ff3b57;
+}
+
+/* Responsive Adjustments */
+@media screen and (max-width: 768px) {
   .main-content {
     margin-left: 0;
     width: 100%;
@@ -291,4 +343,46 @@ tr {
   .total-transactions-info {
     margin: 10px 20px;
   }
+
+  /* Chain Name Details for Smaller Screens */
+  .chain-name-details {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .chain-framework,
+  .chain-da {
+    font-size: 0.7rem;
+  }
+
+  th,
+  td {
+    padding: 8px 10px;
+  }
+}
+
+/* Additional Enhancements */
+
+/* Ensuring Consistent Pie Chart Colors on Hover */
+.pie-chart-card canvas {
+  transition: background-color 0.3s, border-color 0.3s;
+}
+
+/* Tooltip Styling for Pie Charts (if needed) */
+.chartjs-tooltip {
+  opacity: 1;
+  position: absolute;
+  background: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 8px;
+  border-radius: 4px;
+  pointer-events: none;
+  transition: all 0.1s ease;
+  transform: translate(-50%, 0);
+  white-space: nowrap;
+}
+
+/* Ensuring Hover Effects Don't Alter Pie Chart Colors */
+.pie-chart-card canvas:hover {
+  cursor: default; /* Remove pointer cursor on hover */
 }

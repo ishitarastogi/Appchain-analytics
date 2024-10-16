@@ -1,10 +1,7 @@
 // src/components/TransactionMetrics/TransactionMetrics.js
 
-import React, { useState, useEffect } from "react";
-import {
-  fetchGoogleSheetData,
-  fetchAllTransactions,
-} from "../../services/googleSheetService";
+import React, { useContext, useEffect, useState } from "react";
+import { DataContext } from "../Charts/context/DataContext"; // Import DataContext
 import { Bar } from "react-chartjs-2";
 import moment from "moment";
 import "./TransactionMetrics.css";
@@ -16,111 +13,39 @@ import {
   Tooltip,
   TimeScale,
 } from "chart.js";
-import { saveData, getData } from "../../services/indexedDBService";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, TimeScale);
 
-// Helper function to format numbers
+// Helper function to format numbers with two decimal places
 const formatNumber = (num) => {
   if (num >= 1e9) {
-    return Math.round(num / 1e9) + "B";
+    return (num / 1e9).toFixed(2) + "B";
   } else if (num >= 1e6) {
-    return Math.round(num / 1e6) + "M";
+    return (num / 1e6).toFixed(2) + "M";
   } else if (num >= 1e3) {
-    return Math.round(num / 1e3) + "K";
+    return (num / 1e3).toFixed(2) + "K";
   } else {
-    return num.toString();
+    return num.toFixed(2);
   }
 };
 
-const CACHE_ID = "transactionMetricsData";
-const CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
-
 const TransactionMetrics = () => {
+  const { transactionData, loading, error } = useContext(DataContext);
   const [selectedChart, setSelectedChart] = useState("transactions");
   const [chartData, setChartData] = useState(null);
   const [chartDataPerChain, setChartDataPerChain] = useState(null);
   const [totalTransactions, setTotalTransactions] = useState(0);
   const [percentageIncrease, setPercentageIncrease] = useState(0);
-  const [loading, setLoading] = useState(true);
-
-  const fetchAndProcessData = async () => {
-    try {
-      console.log("Fetching Google Sheet data...");
-      const sheetData = await fetchGoogleSheetData();
-      console.log("Sheet data fetched:", sheetData);
-
-      console.log("Fetching all transactions...");
-      const {
-        transactionDataByWeek,
-        transactionsByChain,
-        totalTransactionsCombined,
-      } = await fetchAllTransactions(sheetData);
-      console.log("Transaction data fetched:");
-      console.log("Transaction Data By Week:", transactionDataByWeek);
-      console.log("Transactions By Chain:", transactionsByChain);
-      console.log("Total Transactions Combined:", totalTransactionsCombined);
-
-      const processedData = {
-        transactionDataByWeek,
-        transactionsByChain,
-        totalTransactionsCombined,
-      };
-
-      // Save processed data to IndexedDB
-      await saveData(CACHE_ID, processedData);
-
-      // Process and set state
-      processData(
-        transactionDataByWeek,
-        transactionsByChain,
-        totalTransactionsCombined
-      );
-    } catch (error) {
-      console.error("Error fetching or processing data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadData = async () => {
-    const cachedRecord = await getData(CACHE_ID);
-    const now = Date.now();
-
-    if (
-      cachedRecord &&
-      now - cachedRecord.timestamp < CACHE_DURATION &&
-      cachedRecord.data
-    ) {
-      console.log("Loading data from IndexedDB...");
-      const {
-        transactionDataByWeek,
-        transactionsByChain,
-        totalTransactionsCombined,
-      } = cachedRecord.data;
-      processData(
-        transactionDataByWeek,
-        transactionsByChain,
-        totalTransactionsCombined
-      );
-      setLoading(false);
-    } else {
-      console.log("No valid cached data found. Fetching fresh data...");
-      await fetchAndProcessData();
-    }
-  };
 
   useEffect(() => {
-    loadData();
-
-    // Set up periodic updates
-    const interval = setInterval(() => {
-      console.log("Refreshing data from the server...");
-      fetchAndProcessData();
-    }, CACHE_DURATION); // Update every 6 hours
-
-    return () => clearInterval(interval);
-  }, []);
+    if (transactionData) {
+      processData(
+        transactionData.transactionDataByWeek,
+        transactionData.transactionsByChain,
+        transactionData.totalTransactionsCombined
+      );
+    }
+  }, [transactionData]);
 
   const processData = (
     transactionDataByWeek,
@@ -128,12 +53,12 @@ const TransactionMetrics = () => {
     totalTransactionsCombined
   ) => {
     const weekNumbers = Object.keys(transactionDataByWeek);
-    const weekMoments = weekNumbers.map((week) => moment(week, "YYYY-[W]WW"));
+    const weekMoments = weekNumbers.map((week) => moment(week, "GGGG-[W]WW"));
     const sortedWeekMoments = weekMoments.sort((a, b) => a - b);
     const startWeek = moment.min(weekMoments);
     const endWeek = moment.max(weekMoments);
 
-    // Generate labels
+    // Generate labels from the earliest week to the current week
     const labels = [];
     let currentWeek = startWeek.clone();
     while (currentWeek.isSameOrBefore(endWeek)) {
@@ -143,11 +68,27 @@ const TransactionMetrics = () => {
 
     // Total transactions data
     const totalData = labels.map((label) => {
-      const weekKey = moment(label).startOf("isoWeek").format("YYYY-[W]WW");
+      const weekKey = moment(label).startOf("isoWeek").format("GGGG-[W]WW");
       return transactionDataByWeek[weekKey]
-        ? transactionDataByWeek[weekKey]
+        ? parseFloat(transactionDataByWeek[weekKey].toFixed(2))
         : 0;
     });
+
+    // Round total transactions to two decimal places
+    const roundedTotalTransactions = parseFloat(
+      totalTransactionsCombined.toFixed(2)
+    );
+    setTotalTransactions(roundedTotalTransactions);
+
+    // Calculate percentage increase over the last 3 months (13 weeks)
+    const last13WeeksData = totalData.slice(-13);
+    const totalTx3MonthsAgo = last13WeeksData.reduce((sum, tx) => sum + tx, 0);
+    const percentageInc =
+      totalTx3MonthsAgo === 0
+        ? 0
+        : ((roundedTotalTransactions - totalTx3MonthsAgo) / totalTx3MonthsAgo) *
+          100;
+    setPercentageIncrease(parseFloat(percentageInc.toFixed(2)));
 
     setChartData({
       labels,
@@ -160,20 +101,6 @@ const TransactionMetrics = () => {
         },
       ],
     });
-
-    // Total Transactions Calculation
-    setTotalTransactions(totalTransactionsCombined);
-
-    const totalTx3MonthsAgo = totalData
-      .slice(-13)
-      .reduce((sum, tx) => sum + tx, 0);
-    const percentageInc =
-      totalTx3MonthsAgo === 0
-        ? 0
-        : ((totalTransactionsCombined - totalTx3MonthsAgo) /
-            totalTx3MonthsAgo) *
-          100;
-    setPercentageIncrease(percentageInc.toFixed(2));
 
     // Transactions Per Chain Data
     prepareTransactionsPerChainData(transactionsByChain, labels);
@@ -209,7 +136,7 @@ const TransactionMetrics = () => {
 
     // Process each week
     labels.forEach((label, index) => {
-      const weekKey = moment(label).startOf("isoWeek").format("YYYY-[W]WW");
+      const weekKey = moment(label).startOf("isoWeek").format("GGGG-[W]WW");
       const chainTransactionCounts = {};
 
       // Collect transaction counts for all chains in this week
@@ -234,7 +161,10 @@ const TransactionMetrics = () => {
         if (!dataPerChain[chainName]) {
           dataPerChain[chainName] = new Array(labels.length).fill(0);
         }
-        dataPerChain[chainName][index] = chainTransactionCounts[chainName];
+        // Round transaction count to two decimals
+        dataPerChain[chainName][index] = parseFloat(
+          chainTransactionCounts[chainName].toFixed(2)
+        );
       });
 
       // Calculate 'Others' transactions
@@ -251,7 +181,7 @@ const TransactionMetrics = () => {
         if (!dataPerChain["Others"]) {
           dataPerChain["Others"] = new Array(labels.length).fill(0);
         }
-        dataPerChain["Others"][index] = othersTxCount;
+        dataPerChain["Others"][index] = parseFloat(othersTxCount.toFixed(2));
       }
     });
 
@@ -292,6 +222,10 @@ const TransactionMetrics = () => {
           display: true,
           text: "Weeks",
           color: "#ffffff",
+          font: {
+            size: 14,
+            weight: "bold",
+          },
         },
         ticks: {
           color: "#ffffff",
@@ -306,6 +240,10 @@ const TransactionMetrics = () => {
           display: true,
           text: "Transactions",
           color: "#ffffff",
+          font: {
+            size: 14,
+            weight: "bold",
+          },
         },
         ticks: {
           color: "#ffffff",
@@ -336,6 +274,9 @@ const TransactionMetrics = () => {
             return ""; // Return an empty string for zero values
           },
         },
+        titleColor: "#ffffff",
+        bodyColor: "#ffffff",
+        backgroundColor: "rgba(0, 0, 0, 0.7)",
       },
     },
   };
@@ -366,7 +307,10 @@ const TransactionMetrics = () => {
           <div className="stats-card total-transactions-card">
             <p>Total Transactions</p>
             <span>{formatNumber(totalTransactions)}</span>
-            <span className="percentage-increase" style={{ color: "#FF3B57" }}>
+            <span
+              className="percentage-increase"
+              style={{ color: percentageIncrease >= 0 ? "#FF3B57" : "#00BCD4" }}
+            >
               {percentageIncrease}%{" "}
               {percentageIncrease >= 0 ? "increase" : "decrease"} since last 3
               months
@@ -376,7 +320,9 @@ const TransactionMetrics = () => {
       </div>
       <div className="transaction-metrics-chart-container">
         {loading ? (
-          <p className="loading-text">Chart is loading...</p>
+          <div className="spinner"></div> // Optional: Add spinner
+        ) : error ? (
+          <p className="error-text">{error}</p>
         ) : selectedChart === "transactions" && chartData ? (
           <Bar data={chartData} options={options} />
         ) : selectedChart === "perChain" && chartDataPerChain ? (

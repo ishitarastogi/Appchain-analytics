@@ -249,11 +249,12 @@ export const fetchAllActiveAccounts = async (sheetData) => {
 };
 
 // Fetch all transactions across all chains and structure the data
+
+// Fetch all transactions across all chains and structure the data
 export const fetchAllTransactions = async (sheetData) => {
   let totalTransactionsCombined = 0;
   const transactionDataByWeek = {};
   const transactionsByChain = {};
-  const transactionsByChainDate = {};
 
   // Create an array of promises to fetch data in parallel
   const fetchPromises = sheetData.map(async (chain) => {
@@ -272,7 +273,7 @@ export const fetchAllTransactions = async (sheetData) => {
   const processTransactionData = (transactions, chainName) => {
     transactions.forEach(({ date, value }) => {
       const week = moment(date).startOf("isoWeek").format("GGGG-[W]WW");
-      const parsedValue = parseInt(value, 10);
+      const parsedValue = parseFloat(value); // Changed to parseFloat for decimal precision
 
       // Validate week key format
       const weekKeyPattern = /^\d{4}-W\d{2}$/;
@@ -298,15 +299,6 @@ export const fetchAllTransactions = async (sheetData) => {
       }
       transactionsByChain[chainName][week] += parsedValue;
 
-      // Aggregate by chain and date
-      if (!transactionsByChainDate[chainName]) {
-        transactionsByChainDate[chainName] = {};
-      }
-      if (!transactionsByChainDate[chainName][date]) {
-        transactionsByChainDate[chainName][date] = 0;
-      }
-      transactionsByChainDate[chainName][date] += parsedValue;
-
       totalTransactionsCombined += parsedValue;
     });
   };
@@ -317,7 +309,6 @@ export const fetchAllTransactions = async (sheetData) => {
   return {
     transactionDataByWeek,
     transactionsByChain,
-    transactionsByChainDate,
     totalTransactionsCombined,
   };
 };

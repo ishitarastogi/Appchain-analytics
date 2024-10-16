@@ -18,7 +18,10 @@ import {
   ArcElement,
 } from "chart.js";
 import { Line, Pie } from "react-chartjs-2";
-import { fetchGoogleSheetData, fetchAllTransactions } from "../services/a";
+import {
+  fetchGoogleSheetData,
+  fetchAllTransactions,
+} from "../services/googleSheetService"; // Adjusted import path
 import { abbreviateNumber, formatNumber } from "../utils/numberFormatter";
 import moment from "moment";
 import { saveData, getData, clearAllData } from "../services/indexedDBService";
@@ -76,19 +79,23 @@ const DailyTransactionsPage = () => {
       setLoading(true); // Start loading
       try {
         // Retrieve data from IndexedDB
-        // await clearAllData(); // Clear all data in IndexedDB
-
+        // await clearAllData(); // Clear all data in IndexedDB (uncomment for testing)
+        console.log("🔍 Attempting to retrieve data from IndexedDB...");
         const storedRecord = await getData(DAILY_DATA_ID);
 
         const sixHoursAgo = Date.now() - SIX_HOURS_IN_MS;
 
         if (storedRecord && storedRecord.timestamp > sixHoursAgo) {
           // Use stored data if it's less than 6 hours old
+          console.log("📦 Using cached data from IndexedDB.");
           populateStateWithData(storedRecord.data);
           setLoading(false); // End loading
           return;
         }
 
+        console.log(
+          "🚀 Fetching new data from Google Sheets and Block Explorer APIs..."
+        );
         // Fetch new data if no valid stored data is available
         const sheetData = await fetchGoogleSheetData();
         const transactionsData = await fetchAllTransactions(sheetData);
@@ -99,11 +106,12 @@ const DailyTransactionsPage = () => {
         };
 
         // Save new data to IndexedDB
+        console.log("💾 Saving new data to IndexedDB...");
         await saveData(DAILY_DATA_ID, newData);
 
         populateStateWithData(newData);
       } catch (error) {
-        console.error("Error during data fetching:", error);
+        console.error("❌ Error during data fetching:", error);
         setError("Failed to load transaction data. Please try again later.");
       } finally {
         setLoading(false); // End loading regardless of success or failure
@@ -369,6 +377,7 @@ const DailyTransactionsPage = () => {
       const chainName = chain.name;
       const chainLogo = chain.logoUrl || ""; // Use logoUrl
       const chainVertical = chain.vertical || "N/A";
+      const chainRaas = chain.raas || "N/A"; // Add RaaS data
 
       const chainTransactions = transactionsByChainDate[chainName] || {};
 
@@ -399,8 +408,11 @@ const DailyTransactionsPage = () => {
         chainName,
         chainLogo,
         chainVertical,
+        chainRaas, // Include RaaS
         dailyTransactions,
         percentageIncrease30d,
+        framework: chain.framework || "N/A", // Include Framework
+        da: chain.da || "N/A", // Include DA
       });
     });
 
@@ -518,7 +530,7 @@ const DailyTransactionsPage = () => {
       {
         data: raasData,
         backgroundColor: raasColors,
-        hoverBackgroundColor: raasColors,
+        hoverBackgroundColor: raasColors, // Ensure colors don't change on hover
         borderWidth: 0, // Remove white border
       },
     ],
@@ -543,7 +555,7 @@ const DailyTransactionsPage = () => {
         ),
         hoverBackgroundColor: topChainsLabels.map((label) =>
           getColorForChain(label)
-        ),
+        ), // Ensure colors don't change on hover
         borderWidth: 0, // Remove white border
       },
     ],
@@ -752,6 +764,7 @@ const DailyTransactionsPage = () => {
                 <thead>
                   <tr>
                     <th>Chain</th>
+                    <th>RaaS</th> {/* New RaaS Column */}
                     <th>
                       Daily Transactions{" "}
                       <button onClick={handleSort}>
@@ -776,9 +789,15 @@ const DailyTransactionsPage = () => {
                               "https://www.helika.io/wp-content/uploads/2023/09/proofofplay_logo.png";
                           }}
                         />
-                        {console.log(chain.chainLogo)}
-                        <span>{chain.chainName}</span>
+                        <div className="chain-name-details">
+                          <span className="chain-name">{chain.chainName}</span>
+                          <span className="chain-framework">
+                            Framework: {chain.framework}
+                          </span>
+                          <span className="chain-da">DA: {chain.da}</span>
+                        </div>
                       </td>
+                      <td>{chain.chainRaas}</td> {/* Display RaaS */}
                       <td>{formatNumber(chain.dailyTransactions)}</td>
                       <td>{chain.chainVertical}</td>
                       <td
@@ -806,7 +825,7 @@ const DailyTransactionsPage = () => {
               {/* Top Chains Pie Chart */}
               <div className="pie-chart-card">
                 <h4>Top 10 Chains Market Share</h4>
-                {topChainsData && (
+                {topChainsPieData && (
                   <Pie
                     data={topChainsPieData}
                     options={{
@@ -822,15 +841,20 @@ const DailyTransactionsPage = () => {
                             label: function (context) {
                               const label = context.label || "";
                               const value = context.parsed || 0;
-                              const percentage = (
-                                (value / totalTransactionsAllChains) *
-                                100
-                              ).toFixed(2);
+                              const percentage = totalTransactionsAllChains
+                                ? (
+                                    (value / totalTransactionsAllChains) *
+                                    100
+                                  ).toFixed(2)
+                                : 0;
                               const formattedValue = abbreviateNumber(value);
                               return `${label}: ${formattedValue} (${percentage}%)`;
                             },
                           },
                         },
+                      },
+                      hover: {
+                        mode: null, // Disable hover interactions if necessary
                       },
                     }}
                   />
@@ -839,7 +863,7 @@ const DailyTransactionsPage = () => {
               {/* RaaS Pie Chart */}
               <div className="pie-chart-card">
                 <h4>RaaS Providers Market Share</h4>
-                {raasData && (
+                {raasPieData && (
                   <Pie
                     data={raasPieData}
                     options={{
@@ -855,15 +879,20 @@ const DailyTransactionsPage = () => {
                             label: function (context) {
                               const label = context.label || "";
                               const value = context.parsed || 0;
-                              const percentage = (
-                                (value / totalTransactionsAllChains) *
-                                100
-                              ).toFixed(2);
+                              const percentage = totalTransactionsAllChains
+                                ? (
+                                    (value / totalTransactionsAllChains) *
+                                    100
+                                  ).toFixed(2)
+                                : 0;
                               const formattedValue = abbreviateNumber(value);
                               return `${label}: ${formattedValue} (${percentage}%)`;
                             },
                           },
                         },
+                      },
+                      hover: {
+                        mode: null, // Disable hover interactions if necessary
                       },
                     }}
                   />

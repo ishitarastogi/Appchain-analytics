@@ -1,10 +1,9 @@
 // src/components/TopChains/TopChains.js
 
-import React, { useEffect, useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import moment from "moment";
 import "./TopChains.css";
-import { fetchGoogleSheetData } from "../../services/googleSheetService";
-import { getData } from "../../services/indexedDBService"; // Import getData
+import { DataContext } from "../Charts/context/DataContext"; // Import DataContext
 
 // Importing logos
 import GelatoLogo from "../../assets/logos/raas/Gelato.png";
@@ -52,44 +51,23 @@ const frameworkLogos = {
 };
 
 const TopChains = () => {
+  const { transactionData, loading, error, chainDetails } =
+    useContext(DataContext);
   const [topChains, setTopChains] = useState([]);
-  const [chainDetails, setChainDetails] = useState([]);
-  const [loading, setLoading] = useState(true); // Loading state
-  const [error, setError] = useState(null); // Error state
 
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Fetch chain details from Google Sheets
-        const sheetData = await fetchGoogleSheetData();
-        setChainDetails(sheetData);
-
-        // Retrieve cached transaction data from IndexedDB
-        const cachedRecord = await getData("transactionMetricsData"); // Use the same key as TransactionMetrics
-
-        if (cachedRecord && cachedRecord.data) {
-          const { transactionsByChain, totalTransactionsCombined } =
-            cachedRecord.data;
-          console.log("Cached Transactions By Chain:", transactionsByChain); // Debugging
-          calculateTopChains(
-            transactionsByChain,
-            totalTransactionsCombined,
-            sheetData
-          );
-        } else {
-          console.error("No cached transaction data available.");
-          setError("No cached transaction data available.");
-        }
-      } catch (err) {
-        console.error("Error fetching data:", err);
-        setError("Failed to load top chains data.");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
+    if (
+      transactionData &&
+      transactionData.transactionsByChain &&
+      chainDetails.length > 0
+    ) {
+      calculateTopChains(
+        transactionData.transactionsByChain,
+        transactionData.totalTransactionsCombined,
+        chainDetails
+      );
+    }
+  }, [transactionData, chainDetails]);
 
   const calculateTopChains = (
     transactionsByChain,
@@ -99,7 +77,7 @@ const TopChains = () => {
     const chainTotals = Object.entries(transactionsByChain).map(
       ([chainName, weeks]) => {
         const total = Object.values(weeks).reduce(
-          (sum, val) => sum + parseInt(val, 10),
+          (sum, val) => sum + parseFloat(val),
           0
         );
         return { chainName, total };
@@ -123,10 +101,6 @@ const TopChains = () => {
     const lastWeekKey = getLastWeekKey(transactionsByChain);
     const previousWeekKey = getPreviousWeekKey(lastWeekKey);
 
-    // Debugging logs
-    console.log("Last Week Key:", lastWeekKey);
-    console.log("Previous Week Key:", previousWeekKey);
-
     if (!previousWeekKey) {
       console.error("Cannot determine previous week key.");
       setTopChains([]); // Or handle accordingly
@@ -138,15 +112,6 @@ const TopChains = () => {
         transactionsByChain[chain.chainName]?.[lastWeekKey] || 0;
       const previousWeekTx =
         transactionsByChain[chain.chainName]?.[previousWeekKey] || 0;
-
-      // Debugging logs
-      console.log(`Chain: ${chain.chainName}`);
-      console.log(
-        `Current Week (${lastWeekKey}) Transactions: ${currentWeekTx}`
-      );
-      console.log(
-        `Previous Week (${previousWeekKey}) Transactions: ${previousWeekTx}`
-      );
 
       let percentageIncrease = "N/A";
       if (previousWeekTx > 0) {
@@ -218,7 +183,7 @@ const TopChains = () => {
     return (
       <div className="top-chains-container">
         <h2 className="top-chains-heading">Top 6 Blockchain Chains</h2>
-        <p>Loading data...</p>
+        <div className="spinner"></div> {/* Optional: Add spinner */}
       </div>
     );
   }
@@ -270,7 +235,7 @@ const TopChains = () => {
           ))}
         </div>
       ) : (
-        <p>No top chains data available.</p>
+        <p className="no-data-text">No top chains data available.</p>
       )}
     </div>
   );
