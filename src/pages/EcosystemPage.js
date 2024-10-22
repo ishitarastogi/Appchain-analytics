@@ -1,6 +1,6 @@
 /* src/pages/EcosystemPage.js */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChartPie } from "@fortawesome/free-solid-svg-icons";
@@ -8,12 +8,12 @@ import "./EcosystemPage.css";
 import { Pie, Bar } from "react-chartjs-2";
 import {
   fetchGoogleSheetData,
-  fetchAllTransactions,
+  fetchAllTransaction, // Updated import
   fetchAllTvlData,
   fetchAllActiveAccounts,
 } from "../services/googleSheetService";
 import { abbreviateNumber } from "../utils/numberFormatter";
-import { saveData, getData } from "../services/indexedDBService";
+import { saveData, getData, clearAllData } from "../services/indexedDBService"; // Ensure deleteData is exported
 
 // Register required components for Chart.js
 import {
@@ -35,7 +35,7 @@ ChartJS.register(
   BarElement
 );
 
-const ECOSYSTEM_DATA_ID = "ecosystemData"; // Unique ID for IndexedDB
+const ECOSYSTEM_DATA_ID = "ecosystemData"; // Ensure consistent casing
 const SIX_HOURS_IN_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
 
 const EcosystemPage = () => {
@@ -43,7 +43,14 @@ const EcosystemPage = () => {
   const [raasOptions, setRaasOptions] = useState(["All Raas"]);
   const [selectedRaas, setSelectedRaas] = useState("All Raas");
   const [allChains, setAllChains] = useState([]);
+
+  // Updated state variables to match fetchAllTransaction
   const [transactionsByChainDate, setTransactionsByChainDate] = useState({});
+  const [approximateDataByChainDate, setApproximateDataByChainDate] = useState(
+    {}
+  );
+  const [totalTransactionsCombined, setTotalTransactionsCombined] = useState(0);
+
   const [tvlDataByChainDate, setTvlDataByChainDate] = useState({});
   const [activeAccountsByChainDate, setActiveAccountsByChainDate] = useState(
     {}
@@ -90,55 +97,84 @@ const EcosystemPage = () => {
     );
   };
 
+  // Define fetchData outside useEffect using useCallback to prevent re-creation
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Retrieve data from IndexedDB
+      const storedRecord = await getData(ECOSYSTEM_DATA_ID);
+      const sixHoursAgo = Date.now() - SIX_HOURS_IN_MS;
+
+      if (storedRecord && storedRecord.timestamp > sixHoursAgo) {
+        // Use stored data if it's less than 6 hours old
+        console.log("📦 Using cached data from IndexedDB.", storedRecord.data);
+        populateStateWithData(storedRecord.data);
+        setLoading(false);
+        return;
+      }
+
+      console.log("🚀 Fetching new data from Google Sheets and APIs...");
+      // Fetch new data
+      const sheetData = await fetchGoogleSheetData();
+      const transactionData = await fetchAllTransaction(sheetData); // Updated function
+      const tvlData = await fetchAllTvlData(sheetData);
+      const activeAccountsData = await fetchAllActiveAccounts(sheetData);
+
+      console.log("Fetched Data:", {
+        sheetData,
+        transactionData,
+        tvlData,
+        activeAccountsData,
+      }); // Added for debugging
+
+      const newData = {
+        sheetData,
+        transactionData, // Updated key
+        tvlData,
+        activeAccountsData,
+      };
+
+      // Save new data with timestamp to IndexedDB
+      await saveData(ECOSYSTEM_DATA_ID, newData);
+
+      populateStateWithData(newData);
+    } catch (err) {
+      console.error("❌ Error fetching data:", err);
+      setError(`Failed to load ecosystem data: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   // Fetch and cache data on component mount
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // Retrieve data from IndexedDB
-        const storedRecord = await getData(ECOSYSTEM_DATA_ID);
-        const sixHoursAgo = Date.now() - SIX_HOURS_IN_MS;
-
-        if (storedRecord && storedRecord.timestamp > sixHoursAgo) {
-          // Use stored data if it's less than 6 hours old
-          console.log("📦 Using cached data from IndexedDB.");
-          populateStateWithData(storedRecord.data);
-          setLoading(false);
-          return;
-        }
-
-        console.log("🚀 Fetching new data from Google Sheets and APIs...");
-        // Fetch new data
-        const sheetData = await fetchGoogleSheetData();
-        const transactionsData = await fetchAllTransactions(sheetData);
-        const tvlData = await fetchAllTvlData(sheetData);
-        const activeAccountsData = await fetchAllActiveAccounts(sheetData);
-
-        const newData = {
-          sheetData,
-          transactionsData,
-          tvlData,
-          activeAccountsData,
-        };
-
-        // Save new data with timestamp to IndexedDB
-        await saveData(ECOSYSTEM_DATA_ID, newData);
-
-        populateStateWithData(newData);
-      } catch (err) {
-        console.error("❌ Error fetching data:", err);
-        setError(`Failed to load ecosystem data: ${err.message}`);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   // Function to populate state with fetched data
   const populateStateWithData = (data) => {
-    const { sheetData, transactionsData, tvlData, activeAccountsData } = data;
+    const { sheetData, transactionData, tvlData, activeAccountsData } = data;
+
+    // Defensive Checks
+    if (!transactionData) {
+      console.error("❌ transactionData is undefined.");
+      setError("Transaction data is missing.");
+      return;
+    }
+
+    if (
+      !transactionData.transactionsByChainDate ||
+      typeof transactionData.transactionsByChainDate !== "object"
+    ) {
+      console.error(
+        "❌ transactionsByChainDate is missing or not an object in transactionData.",
+        transactionData
+      );
+      setError("Invalid transaction data structure.");
+      return;
+    }
+
+    // Similarly, add checks for tvlData and activeAccountsData if necessary
 
     // Filter chains with status "Mainnet"
     const mainnetChains = sheetData.filter(
@@ -147,8 +183,11 @@ const EcosystemPage = () => {
 
     setAllChains(mainnetChains);
 
-    // Corrected data assignments
-    setTransactionsByChainDate(transactionsData.transactionsByChain);
+    // Updated data assignments
+    setTransactionsByChainDate(transactionData.transactionsByChainDate);
+    setApproximateDataByChainDate(transactionData.approximateDataByChainDate);
+    setTotalTransactionsCombined(transactionData.totalTransactionsCombined);
+
     setTvlDataByChainDate(tvlData.tvlDataByChainDate);
     setActiveAccountsByChainDate(activeAccountsData.activeAccountsByChainDate);
 
@@ -176,6 +215,7 @@ const EcosystemPage = () => {
     loading,
     allChains,
     transactionsByChainDate,
+    approximateDataByChainDate, // Added dependency
     tvlDataByChainDate,
     activeAccountsByChainDate,
     selectedRaas,
@@ -211,7 +251,7 @@ const EcosystemPage = () => {
       const vertical = chain.vertical || "Unknown";
       const transactions = transactionsByChainDate[chain.name] || {};
       const totalTransactions = Object.values(transactions).reduce(
-        (acc, curr) => acc + curr,
+        (acc, curr) => acc + curr.value, // Updated to access 'value'
         0
       );
       if (!transactionCountByVertical[vertical]) {
@@ -351,7 +391,7 @@ const EcosystemPage = () => {
       if (tableFilter === "Transaction Count") {
         const transactions = transactionsByChainDate[chain.name] || {};
         const totalTransactions = Object.values(transactions).reduce(
-          (acc, curr) => acc + curr,
+          (acc, curr) => acc + curr.value, // Updated to access 'value'
           0
         );
         metricValue = totalTransactions;
@@ -736,6 +776,19 @@ const EcosystemPage = () => {
     setSelectedRaas(value);
   };
 
+  // Function to clear cache (Debugging Purpose)
+  // const clearCache = async () => {
+  //   try {
+  //     await clearAllData(ECOSYSTEM_DATA_ID);
+  //     console.log("✅ Cached data cleared.");
+  //     // Refetch the data
+  //     await fetchData();
+  //   } catch (err) {
+  //     console.error("❌ Error clearing cache:", err);
+  //     setError(`Failed to clear cache: ${err.message}`);
+  //   }
+  // };
+
   return (
     <div className="ecosystem-page">
       <Sidebar />
@@ -765,6 +818,11 @@ const EcosystemPage = () => {
 
         {/* Error Message */}
         {error && <div className="error-message">{error}</div>}
+
+        {/* Clear Cache Button (Temporary) */}
+        {/* <button onClick={clearCache} className="clear-cache-button">
+          Clear Cached Data
+        </button> */}
 
         {/* Loading Indicator */}
         {loading && <div className="loading">Loading ecosystem data...</div>}
