@@ -85,7 +85,7 @@ export const fetchLatestTpsData = async (projectId) => {
     // Data is an array of arrays: [[timestamp, tpsValue, ...], ...]
     const tpsData = data.map((item) => {
       const timestamp = item[0]; // Unix timestamp in seconds
-      const tpsValue = item[1] / 86400; // TPS value
+      const tpsValue = item[1]; // TPS value
       const date = moment.unix(timestamp).format("YYYY-MM-DD");
       return {
         date,

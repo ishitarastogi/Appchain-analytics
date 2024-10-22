@@ -69,6 +69,28 @@ const Sidebar = () => {
         <li className="sidebar-category">
           <FontAwesomeIcon icon={faCube} /> Ecosystem
         </li>
+        <ul className="sidebar-subcategories">
+          <li>
+            <Link to="/vertical" className="subcategory-link">
+              Vertical
+            </Link>
+          </li>
+          <li>
+            <Link to="/framework" className="subcategory-link">
+              Framework
+            </Link>
+          </li>
+          <li>
+            <Link to="/da" className="subcategory-link">
+              Data Availability
+            </Link>
+          </li>
+          <li>
+            <Link to="/layer" className="subcategory-link">
+              Layer2/Layer3
+            </Link>
+          </li>
+        </ul>
       </ul>
     </nav>
   );

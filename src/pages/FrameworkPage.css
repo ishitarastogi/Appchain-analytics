@@ -1,0 +1,379 @@
+/* src/pages/FrameworkPage.css */
+
+/* Overall Page Styles */
+.framework-page {
+  display: flex;
+  background-color: #000; /* Black background */
+  color: #ffffff; /* White text color for better contrast */
+  height: 100vh; /* Full screen height */
+  overflow: hidden;
+  padding: 20px; /* Add some padding to the whole page */
+}
+
+/* Main Content Area */
+.main-content {
+  margin-left: 240px; /* Offset by the sidebar width */
+  padding: 20px;
+  width: calc(100% - 240px);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+/* Framework Header */
+.framework-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.heading-container {
+  display: flex;
+  align-items: center;
+}
+
+.heading-container .icon {
+  font-size: 2rem; /* Adjusted font size to match heading */
+  margin-left: 20px;
+  line-height: 1; /* Ensure consistent line height */
+}
+
+.heading-container h2 {
+  margin-left: 10px;
+  font-size: 2rem;
+  line-height: 1; /* Ensure consistent line height */
+}
+
+.description {
+  margin: 0;
+  font-size: 1rem;
+  color: #bbbbbb;
+}
+
+/* RaaS Dropdown */
+.raas-dropdown {
+  margin-right: 40px;
+  margin-top: 40px; /* Increased spacing to make it more visually appealing */
+}
+
+.raas-dropdown-select {
+  background-color: #1c1c1c;
+  color: #ffffff;
+  border: 1px solid #ffffff;
+  padding: 8px 22px;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+/* Table Header with Filter */
+.table-header-with-filter {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.table-header-with-filter span {
+  font-weight: bold;
+  font-size: 1rem;
+}
+
+.table-filter-section {
+  display: flex;
+  align-items: center;
+}
+
+.table-filter-section span {
+  margin-right: 8px;
+  color: #ffffff;
+  font-size: 0.9rem;
+}
+
+.table-filter-select {
+  background-color: #1c1c1c;
+  color: #ffffff;
+  border: 1px solid #ffffff;
+  padding: 5px 10px;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+/* Framework Name Styling */
+.framework-name {
+  display: flex;
+  flex-direction: column;
+}
+
+.framework-name .name {
+  font-weight: bold;
+}
+
+.framework-name .count {
+  font-size: 0.9rem;
+  color: #bbbbbb;
+}
+
+/* Top Chains Styling */
+.top-chains {
+  display: flex;
+  flex-wrap: wrap; /* Allow wrapping within top chains */
+}
+
+.top-chains .chain-logo {
+  width: 30px;
+  height: 30px;
+  margin-right: 5px;
+  margin-bottom: 5px; /* Add bottom margin for wrapped items */
+  border-radius: 50%;
+  object-fit: cover;
+  transition: transform 0.2s; /* Smooth zoom on hover */
+}
+
+.top-chains .chain-logo:hover {
+  transform: scale(1.1);
+}
+
+/* Framework Content Layout */
+.framework-content {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 40px;
+  flex-wrap: nowrap; /* Prevent wrapping to keep Pie chart in place */
+  align-items: flex-start; /* Align items to the top */
+}
+
+/* Left Section: Table */
+.left-section {
+  flex: 1 1 45%; /* Grow and shrink with a base width of 45% */
+  min-width: 300px; /* Minimum width for responsiveness */
+  margin-right: 20px; /* Space between table and pie chart */
+}
+
+/* Right Section: Chains by Framework Pie Chart */
+.right-section {
+  flex: 0 0 45%; /* Fixed width to prevent shrinking */
+  min-width: 300px; /* Minimum width to maintain size */
+}
+
+/* Table Card Styling */
+.table-card {
+  background-color: #1c1c1c;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  overflow-y: auto; /* Enable vertical scrolling if content overflows */
+  height: 700px; /* Fixed height to align with the specific chart */
+}
+
+/* Specific Styling for "Chains by Framework" Chart Card */
+.chains-by-framework-chart {
+  background-color: #1c1c1c;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  height: 700px; /* Match the table's height */
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.chains-by-framework-chart h3 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.chains-by-framework-chart canvas {
+  width: 100%;
+  height: 100%;
+}
+
+/* Other Chart Cards Remain Unaffected */
+.chart-card {
+  background-color: #1c1c1c;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+
+.chart-card h3 {
+  text-align: center;
+  margin-bottom: 20px;
+}
+
+.chart-card canvas {
+  width: 100%;
+  height: 400px; /* Default height for other charts */
+}
+
+/* Charts Section */
+.charts-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin: 20px 35px;
+}
+
+/* Charts Row for Side-by-Side Charts */
+.charts-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  justify-content: space-between;
+}
+
+.half-width {
+  flex: 1 1 calc(45% - 10px);
+  min-width: 300px;
+}
+
+/* Responsive Adjustments */
+@media screen and (max-width: 1200px) {
+  .framework-content {
+    flex-direction: column;
+  }
+
+  .left-section,
+  .right-section {
+    flex: 1 1 100%;
+    margin-right: 0;
+  }
+
+  .charts-section {
+    margin: 20px 20px;
+  }
+
+  .charts-row {
+    flex-direction: column;
+  }
+
+  .chart-card {
+    flex: 1 1 100%;
+  }
+}
+
+@media screen and (max-width: 768px) {
+  .main-content {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .charts-section {
+    gap: 15px;
+    margin: 20px 10px;
+  }
+
+  /* Adjust table and specific chart heights for mobile */
+  .table-card,
+  .chains-by-framework-chart {
+    height: 300px; /* Reduced height for mobile */
+  }
+
+  .chains-by-framework-chart canvas {
+    height: 100%;
+  }
+
+  .chart-card {
+    height: auto; /* Let other charts adjust naturally */
+  }
+
+  .chart-card canvas {
+    height: 250px; /* Adjusted height for smaller screens */
+  }
+
+  .raas-dropdown-select {
+    margin-right: 20px;
+    margin-top: 20px;
+  }
+
+  .framework-name .count {
+    font-size: 0.8rem;
+  }
+
+  .top-chains .chain-logo {
+    width: 25px;
+    height: 25px;
+  }
+
+  th,
+  td {
+    padding: 8px 10px;
+  }
+
+  .chart-card h3 {
+    font-size: 1.2rem;
+  }
+}
+
+/* Tooltip Styles */
+.chain-logo-container {
+  position: relative;
+  display: inline-block;
+}
+
+.chain-logo-container::after {
+  content: attr(data-chain-name) "\A"attr(data-metric-type) ": " attr(data-metric-value);
+  white-space: pre; /* Preserve line breaks */
+  position: absolute;
+  bottom: 125%; /* Position above the image */
+  left: 50%;
+  transform: translateX(-50%);
+  background-color: rgba(0, 0, 0, 0.85);
+  color: #fff;
+  padding: 6px 8px;
+  border-radius: 4px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s;
+  z-index: 10;
+  font-size: 0.85rem;
+  text-align: center;
+  min-width: 100px;
+  pointer-events: none;
+}
+
+.chain-logo-container::before {
+  content: "";
+  position: absolute;
+  bottom: 115%; /* Adjust to position the arrow */
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: transparent transparent rgba(0, 0, 0, 0.85) transparent;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.chain-logo-container:hover::after,
+.chain-logo-container:hover::before {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Ensuring Hover Effects Don't Alter Pie Chart Colors */
+.chart-card canvas:hover {
+  cursor: default; /* Remove pointer cursor on hover */
+}
+
+/* Optional: Add scrollbars styling for better aesthetics */
+.table-card::-webkit-scrollbar {
+  width: 8px;
+}
+
+.table-card::-webkit-scrollbar-track {
+  background: #1c1c1c;
+}
+
+.table-card::-webkit-scrollbar-thumb {
+  background-color: #888;
+  border-radius: 4px;
+}
+
+.table-card::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}

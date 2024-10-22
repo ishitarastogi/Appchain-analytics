@@ -6,6 +6,9 @@ import DailyTransactionsPage from "./pages/DailyTransactionsPage";
 import ActiveAccountsPage from "./pages/ActiveAccountsPage";
 import TPSPage from "./pages/TPS"; // Import the new TPSPage component
 import TVLPage from "./pages/TVL";
+import EcosystemPage from "./pages/EcosystemPage";
+import Framework from "./pages/Framework";
+
 const App = () => {
   return (
     <Router>
@@ -15,6 +18,8 @@ const App = () => {
         <Route path="/active-accounts" element={<ActiveAccountsPage />} />
         <Route path="/tps" element={<TPSPage />} /> {/* New Route */}
         <Route path="/tvl" element={<TVLPage />} /> {/* New Route */}
+        <Route path="/vertical" element={<EcosystemPage />} /> {/* New Route */}
+        <Route path="/framework" element={<Framework />} /> {/* New Route */}
       </Routes>
     </Router>
   );

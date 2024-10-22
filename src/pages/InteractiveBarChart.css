@@ -1,0 +1,8 @@
+/* src/components/InteractiveBarChart.css */
+
+.interactive-bar-chart-container {
+  position: relative;
+}
+
+/* Tooltip Styling (optional if using custom tooltips) */
+/* If using a library like react-tooltip, adjust accordingly */

@@ -1,6 +1,6 @@
 // src/pages/DailyTransactionsPage.js
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChartLine, faSort } from "@fortawesome/free-solid-svg-icons";
@@ -20,7 +20,7 @@ import {
 import { Line, Pie } from "react-chartjs-2";
 import {
   fetchGoogleSheetData,
-  fetchAllTransactions,
+  fetchAllTransaction,
 } from "../services/googleSheetService"; // Adjusted import path
 import { abbreviateNumber, formatNumber } from "../utils/numberFormatter";
 import moment from "moment";
@@ -45,11 +45,14 @@ const DailyTransactionsPage = () => {
   // State variables
   const [currency, setCurrency] = useState("ETH");
   const [timeUnit, setTimeUnit] = useState("Daily"); // "Daily" or "Monthly"
-  const [timeRange, setTimeRange] = useState("90 days");
+  const [timeRange, setTimeRange] = useState("Daily"); // Set default to "Daily"
   const [selectedRaas, setSelectedRaas] = useState("All Raas"); // Default is "All Raas"
   const [chartType, setChartType] = useState("absolute"); // 'absolute', 'stacked', 'percentage'
   const [allChains, setAllChains] = useState([]);
   const [transactionsByChainDate, setTransactionsByChainDate] = useState({});
+  const [approximateDataByChainDate, setApproximateDataByChainDate] = useState(
+    {}
+  ); // New state to track approximate data
   const [chartData, setChartData] = useState(null);
   const [chartDates, setChartDates] = useState([]); // State variable for dates
   const [topChains, setTopChains] = useState([]);
@@ -58,6 +61,11 @@ const DailyTransactionsPage = () => {
   const [tableData, setTableData] = useState([]); // State for table data
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true); // Loading state
+  const [totalTransactionsAllChains, setTotalTransactionsAllChains] =
+    useState(0);
+  const [totalTransactionsTopChains, setTotalTransactionsTopChains] =
+    useState(0);
+  const [chainColorMap, setChainColorMap] = useState({}); // State for chain colors
   const SIX_HOURS_IN_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
 
   const raasOptions = [
@@ -70,7 +78,7 @@ const DailyTransactionsPage = () => {
   ];
 
   const timeRangeOptions = {
-    Daily: ["90 days", "180 days", "1 Year", "All"],
+    Daily: ["Daily", "90 days", "180 days", "1 Year", "All"],
     Monthly: ["3 Months", "6 Months", "1 Year", "All"],
   };
 
@@ -79,7 +87,7 @@ const DailyTransactionsPage = () => {
       setLoading(true); // Start loading
       try {
         // Retrieve data from IndexedDB
-        // await clearAllData(); // Clear all data in IndexedDB (uncomment for testing)
+        await clearAllData(); // Uncomment to clear IndexedDB for testing
         console.log("🔍 Attempting to retrieve data from IndexedDB...");
         const storedRecord = await getData(DAILY_DATA_ID);
 
@@ -98,7 +106,7 @@ const DailyTransactionsPage = () => {
         );
         // Fetch new data if no valid stored data is available
         const sheetData = await fetchGoogleSheetData();
-        const transactionsData = await fetchAllTransactions(sheetData);
+        const transactionsData = await fetchAllTransaction(sheetData);
 
         const newData = {
           sheetData,
@@ -119,6 +127,7 @@ const DailyTransactionsPage = () => {
     };
 
     fetchData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -126,6 +135,7 @@ const DailyTransactionsPage = () => {
       updateChartData();
       updateTableData();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     allChains,
     transactionsByChainDate,
@@ -145,27 +155,16 @@ const DailyTransactionsPage = () => {
 
     setAllChains(mainnetChains);
     setTransactionsByChainDate(transactionsData.transactionsByChainDate);
+    setApproximateDataByChainDate(
+      transactionsData.approximateDataByChainDate || {}
+    );
 
-    // Calculate transactions by RaaS
-    const raasTransactions = {};
-    mainnetChains.forEach((chain) => {
-      const { raas, name } = chain;
-      const chainTransactions = transactionsData.transactionsByChainDate[name];
-
-      if (chainTransactions) {
-        const totalChainTransactions = Object.values(chainTransactions).reduce(
-          (acc, val) => acc + val,
-          0
-        );
-
-        if (!raasTransactions[raas]) {
-          raasTransactions[raas] = 0;
-        }
-        raasTransactions[raas] += totalChainTransactions;
-      }
+    // Initialize chainColorMap
+    const colorMap = {};
+    mainnetChains.forEach((chain, index) => {
+      colorMap[chain.name] = getColorByIndex(index);
     });
-
-    setTransactionsByRaas(raasTransactions);
+    setChainColorMap(colorMap);
   };
 
   const updateChartData = () => {
@@ -180,7 +179,7 @@ const DailyTransactionsPage = () => {
           );
 
     // Aggregate data based on the selected time range and unit
-    const dates = getFilteredDates();
+    const dates = timeRange === "Daily" ? getAllDates() : getFilteredDates(); // Show all dates when "Daily" is selected
     setChartDates(dates); // Store dates in state for access in tooltips
 
     // Prepare labels and datasets
@@ -198,25 +197,28 @@ const DailyTransactionsPage = () => {
 
     const chainTotals = filteredChains.map((chain) => {
       const transactionCounts = dates.map(
-        (date) => transactionsByChainDate[chain.name]?.[date] || 0
+        (date) => transactionsByChainDate[chain.name]?.[date]?.value || 0
       );
       const total = transactionCounts.reduce((acc, val) => acc + val, 0);
       return { name: chain.name, total };
     });
 
     chainTotals.sort((a, b) => b.total - a.total);
-    const topChainsList = chainTotals.slice(0, 10);
-    setTopChainsList(topChainsList); // Store topChainsList in state
-    const topChainsNames = topChainsList.map((chain) => chain.name);
+    const topChainsListData = chainTotals.slice(0, 10);
+    setTopChainsList(topChainsListData); // Store topChainsList in state
+    const topChainsNames = topChainsListData.map((chain) => chain.name);
     setTopChains(topChainsNames);
 
     const totalTransactionsByDate = {};
 
     topChainsNames.forEach((chainName) => {
       const chainData = [];
+      const chainTransactions = transactionsByChainDate[chainName] || {};
+
       if (timeUnit === "Daily") {
         dates.forEach((date, idx) => {
-          const value = transactionsByChainDate[chainName]?.[date] || 0;
+          const transactionEntry = chainTransactions[date];
+          const value = transactionEntry ? transactionEntry.value : 0;
           chainData.push(value);
 
           // Aggregate total transactions
@@ -224,10 +226,7 @@ const DailyTransactionsPage = () => {
             (totalTransactionsByDate[date] || 0) + value;
         });
       } else {
-        const monthlyData = aggregateMonthlyData(
-          transactionsByChainDate[chainName] || {},
-          dates
-        );
+        const monthlyData = aggregateMonthlyData(chainTransactions, dates);
         const months = getMonthlyLabels(dates);
         months.forEach((month) => {
           const value = monthlyData[month] || 0;
@@ -273,20 +272,24 @@ const DailyTransactionsPage = () => {
     let dateDifference;
 
     switch (timeRange) {
+      case "Daily":
+        // For Daily, get the most recent non-approximate date
+        startDate = findMostRecentNonApproximateDate();
+        if (!startDate) {
+          console.warn("No non-approximate data found in the last 30 days.");
+          return [];
+        }
+        return [startDate];
       case "90 days":
+      case "3 Months":
         dateDifference = 90;
         break;
       case "180 days":
+      case "6 Months":
         dateDifference = 180;
         break;
       case "1 Year":
         dateDifference = 365;
-        break;
-      case "3 Months":
-        dateDifference = 90;
-        break;
-      case "6 Months":
-        dateDifference = 180;
         break;
       case "All":
         // Find the earliest launch date
@@ -322,6 +325,45 @@ const DailyTransactionsPage = () => {
     return dates;
   };
 
+  const getAllDates = () => {
+    const today = moment().format("YYYY-MM-DD");
+    // Find the earliest launch date
+    const launchDates = allChains
+      .filter((chain) => chain.launchDate)
+      .map((chain) => moment(new Date(chain.launchDate)).format("YYYY-MM-DD"));
+    let startDate;
+    if (launchDates.length > 0) {
+      startDate = launchDates.reduce((minDate, date) =>
+        date < minDate ? date : minDate
+      );
+    } else {
+      startDate = moment().subtract(1, "year").format("YYYY-MM-DD"); // default to 1 year ago
+    }
+
+    const dates = [];
+    let currentDate = moment(startDate);
+    while (currentDate.isSameOrBefore(today, "day")) {
+      dates.push(currentDate.format("YYYY-MM-DD"));
+      currentDate.add(1, "day");
+    }
+    return dates;
+  };
+
+  const findMostRecentNonApproximateDate = () => {
+    let currentDate = moment().subtract(1, "day");
+    while (currentDate.isAfter(moment().subtract(30, "days"))) {
+      const dateStr = currentDate.format("YYYY-MM-DD");
+      const isApproximate = Object.values(approximateDataByChainDate).some(
+        (chainData) => chainData[dateStr]
+      );
+      if (!isApproximate) {
+        return dateStr;
+      }
+      currentDate.subtract(1, "day");
+    }
+    return null;
+  };
+
   const getMonthlyLabels = (dates) => {
     const months = new Set();
     dates.forEach((date) => {
@@ -340,27 +382,192 @@ const DailyTransactionsPage = () => {
       if (!monthlyData[monthKey]) {
         monthlyData[monthKey] = 0;
       }
-      monthlyData[monthKey] += chainData[date] || 0;
+      monthlyData[monthKey] += chainData[date]?.value || 0;
     });
     return monthlyData;
   };
 
+  // 30-Day Percentage Change Calculation (Fixed)
+  const thirtyDayPercentageChanges = useMemo(() => {
+    const percentageChanges = {};
+
+    allChains.forEach((chain) => {
+      const chainName = chain.name;
+      const chainTransactions = transactionsByChainDate[chainName] || {};
+
+      // Define the current 30-day period
+      const currentPeriodDates = [];
+      for (let i = 1; i <= 30; i++) {
+        const dateStr = moment().subtract(i, "days").format("YYYY-MM-DD");
+        currentPeriodDates.push(dateStr);
+      }
+
+      // Define the previous 30-day period
+      const previousPeriodDates = [];
+      for (let i = 31; i <= 60; i++) {
+        const dateStr = moment().subtract(i, "days").format("YYYY-MM-DD");
+        previousPeriodDates.push(dateStr);
+      }
+
+      // Filter out approximate dates for current period
+      const filteredCurrentDates = currentPeriodDates.filter((date) => {
+        return !Object.values(approximateDataByChainDate).some(
+          (chainData) => chainData[date]
+        );
+      });
+
+      // Filter out approximate dates for previous period
+      const filteredPreviousDates = previousPeriodDates.filter((date) => {
+        return !Object.values(approximateDataByChainDate).some(
+          (chainData) => chainData[date]
+        );
+      });
+
+      // Sum transactions in current period
+      const currentSum = filteredCurrentDates.reduce((sum, date) => {
+        return sum + (chainTransactions[date]?.value || 0);
+      }, 0);
+
+      // Sum transactions in previous period
+      const previousSum = filteredPreviousDates.reduce((sum, date) => {
+        return sum + (chainTransactions[date]?.value || 0);
+      }, 0);
+
+      // Calculate percentage increase
+      let percentageIncrease = null;
+      if (previousSum > 0) {
+        percentageIncrease = ((currentSum - previousSum) / previousSum) * 100;
+      } else if (currentSum > 0) {
+        percentageIncrease = 100; // From 0 to some value is 100% increase
+      } else {
+        percentageIncrease = 0; // No change
+      }
+
+      percentageChanges[chainName] = percentageIncrease;
+    });
+
+    return percentageChanges;
+  }, [allChains, transactionsByChainDate, approximateDataByChainDate]);
+
   const updateTableData = () => {
     const today = moment().format("YYYY-MM-DD");
-    const yesterday = moment().subtract(1, "day").format("YYYY-MM-DD");
 
-    // Generate dates for last 60 days
-    const fullDates = [];
-    let currentDate = moment().subtract(60, "days");
-    while (currentDate.isSameOrBefore(today, "day")) {
-      fullDates.push(currentDate.format("YYYY-MM-DD"));
-      currentDate.add(1, "day");
+    // Compute currentPeriodDates and previousPeriodDates based on selected timeRange
+    let currentPeriodDates = [];
+    let previousPeriodDates = [];
+
+    if (timeRange === "Daily") {
+      // For "Daily", get the most recent non-approximate date
+      const foundDate = findMostRecentNonApproximateDate();
+      if (foundDate) {
+        currentPeriodDates = [foundDate];
+      } else {
+        console.warn("No non-approximate data found in the last 30 days.");
+      }
+
+      // For previous period, find the previous non-approximate date
+      let currentDate = moment(foundDate).subtract(1, "day");
+      let previousFoundDate = null;
+
+      while (currentDate.isAfter(moment().subtract(60, "days"))) {
+        const dateStr = currentDate.format("YYYY-MM-DD");
+        const isApproximate = Object.values(approximateDataByChainDate).some(
+          (chainData) => chainData[dateStr]
+        );
+        if (!isApproximate) {
+          previousFoundDate = dateStr;
+          break;
+        }
+        currentDate.subtract(1, "day");
+      }
+
+      if (previousFoundDate) {
+        previousPeriodDates = [previousFoundDate];
+      }
+    } else {
+      // For other time ranges, use existing logic
+      currentPeriodDates = getFilteredDates().filter((date) => {
+        // Exclude approximate dates only if timeRange is "Daily"
+        if (timeRange === "Daily") {
+          const isApproximate = Object.values(approximateDataByChainDate).some(
+            (chainData) => chainData[date]
+          );
+          return !isApproximate;
+        }
+        return true;
+      });
+
+      // Determine the previous time range
+      const startDate = currentPeriodDates[0];
+      const endDate = currentPeriodDates[currentPeriodDates.length - 1];
+      const dateDifference =
+        moment(endDate).diff(moment(startDate), "days") + 1; // Number of days in the current time range
+
+      const previousStartDate = moment(startDate)
+        .subtract(dateDifference, "days")
+        .format("YYYY-MM-DD");
+      const previousEndDate = moment(startDate)
+        .subtract(1, "days")
+        .format("YYYY-MM-DD");
+
+      // Generate previous dates
+      let currentDate = moment(previousStartDate);
+      while (currentDate.isSameOrBefore(previousEndDate)) {
+        const dateStr = currentDate.format("YYYY-MM-DD");
+        previousPeriodDates.push(dateStr);
+        currentDate.add(1, "day");
+      }
     }
 
-    const last30Days = fullDates.slice(-30); // Last 30 days
-    const previous30Days = fullDates.slice(-60, -30); // Previous 30 days
+    // Exclude approximate dates from current and previous periods
+    currentPeriodDates = currentPeriodDates.filter((date) => {
+      const isApproximate = Object.values(approximateDataByChainDate).some(
+        (chainData) => chainData[date]
+      );
+      return !isApproximate;
+    });
 
-    const tableData = [];
+    previousPeriodDates = previousPeriodDates.filter((date) => {
+      const isApproximate = Object.values(approximateDataByChainDate).some(
+        (chainData) => chainData[date]
+      );
+      return !isApproximate;
+    });
+
+    let totalTransactionsAllChainsLocal = 0;
+    let transactionsByRaasLocal = {};
+
+    // Determine the dates for transactionsByRaas
+    let raasPeriodDates;
+    if (selectedRaas !== "All Raas") {
+      // If a specific RaaS is selected, use "All Time"
+      raasPeriodDates = getAllDates();
+    } else {
+      // Use currentPeriodDates based on selected time range
+      raasPeriodDates = currentPeriodDates;
+    }
+
+    // Compute transactionsByRaas
+    allChains.forEach((chain) => {
+      const chainName = chain.name;
+      const chainRaas = chain.raas || "N/A";
+
+      const chainTransactions = transactionsByChainDate[chainName] || {};
+
+      // Sum transactions over raasPeriodDates
+      const totalTransactions = raasPeriodDates.reduce((sum, date) => {
+        const transactionEntry = chainTransactions[date];
+        return sum + (transactionEntry ? transactionEntry.value : 0);
+      }, 0);
+
+      // Aggregate transactions by RaaS
+      if (!transactionsByRaasLocal[chainRaas]) {
+        transactionsByRaasLocal[chainRaas] = 0;
+      }
+      transactionsByRaasLocal[chainRaas] += totalTransactions;
+    });
+
+    const tableDataLocal = [];
 
     // Get the filtered chains based on RaaS selection
     const filteredChains =
@@ -381,48 +588,47 @@ const DailyTransactionsPage = () => {
 
       const chainTransactions = transactionsByChainDate[chainName] || {};
 
-      // Daily transactions (transactions on yesterday)
-      const dailyTransactions = chainTransactions[yesterday] || 0;
-
-      // Sum transactions over last 30 days
-      const last30DaysTransactions = last30Days.reduce((sum, date) => {
-        return sum + (chainTransactions[date] || 0);
+      // Sum transactions over current period
+      const currentTransactions = currentPeriodDates.reduce((sum, date) => {
+        const transactionEntry = chainTransactions[date];
+        return sum + (transactionEntry ? transactionEntry.value : 0);
       }, 0);
 
-      // Sum transactions over previous 30 days
-      const previous30DaysTransactions = previous30Days.reduce((sum, date) => {
-        return sum + (chainTransactions[date] || 0);
-      }, 0);
+      totalTransactionsAllChainsLocal += currentTransactions;
 
-      // Calculate 30d percentage increase
-      const percentageIncrease30d =
-        previous30DaysTransactions > 0
-          ? ((last30DaysTransactions - previous30DaysTransactions) /
-              previous30DaysTransactions) *
-            100
-          : last30DaysTransactions > 0
-          ? 100
-          : 0;
+      // Retrieve the fixed 30-day percentage change
+      const percentageIncrease = thirtyDayPercentageChanges[chainName];
 
-      tableData.push({
+      tableDataLocal.push({
         chainName,
         chainLogo,
         chainVertical,
         chainRaas, // Include RaaS
-        dailyTransactions,
-        percentageIncrease30d,
+        transactions: currentTransactions,
+        percentageIncrease,
         framework: chain.framework || "N/A", // Include Framework
         da: chain.da || "N/A", // Include DA
       });
     });
 
-    // Sort only on dailyTransactions column
-    tableData.sort((a, b) => b.dailyTransactions - a.dailyTransactions);
+    // Sort on transactions column
+    tableDataLocal.sort((a, b) => b.transactions - a.transactions);
 
     // Take top 10 chains
-    const top10TableData = tableData.slice(0, 10);
+    const top10TableData = tableDataLocal.slice(0, 10);
+
+    // Calculate totalTransactionsTopChains
+    const totalTransactionsTopChainsLocal = top10TableData.reduce(
+      (sum, chain) => sum + chain.transactions,
+      0
+    );
 
     setTableData(top10TableData);
+
+    // Update the state variables
+    setTotalTransactionsAllChains(totalTransactionsAllChainsLocal);
+    setTotalTransactionsTopChains(totalTransactionsTopChainsLocal);
+    setTransactionsByRaas(transactionsByRaasLocal); // Updated transactionsByRaas
   };
 
   // Event Handlers
@@ -433,8 +639,10 @@ const DailyTransactionsPage = () => {
 
   const handleTimeUnitChange = (unit) => {
     setTimeUnit(unit);
-    // Update timeRange to default option when time unit changes
-    setTimeRange(timeRangeOptions[unit][0]);
+    // Keep the current timeRange unless it's not available
+    if (!timeRangeOptions[unit].includes(timeRange)) {
+      setTimeRange(timeRangeOptions[unit][0]);
+    }
   };
 
   const handleTimeRangeChange = (range) => {
@@ -451,54 +659,38 @@ const DailyTransactionsPage = () => {
   };
 
   // Utility functions
+  const COLORS = [
+    "#FF6384",
+    "#36A2EB",
+    "#FFCE56",
+    "#4BC0C0",
+    "#9966FF",
+    "#FF9F40",
+    "#C9CBCF",
+    "#E7E9ED",
+    "#7CB342",
+    "#D32F2F",
+    "#F06292",
+    "#BA68C8",
+    "#4DD0E1",
+    "#9575CD",
+    "#7986CB",
+    "#81C784",
+    "#AED581",
+    "#FF8A65",
+    "#A1887F",
+    "#90A4AE",
+    // Add more colors if needed
+  ];
+
+  const getColorByIndex = (index) => COLORS[index % COLORS.length];
+
   const getColorForChain = (chainName) => {
-    const colorMap = {
-      Playnance: "#FF6384",
-      Anomaly: "#36A2EB",
-      "Aleph Zero": "#FFCE56",
-      Everclear: "#4BC0C0",
-      Fox: "#9966FF",
-      Ethernity: "#FF9F40",
-      Camp: "#C9CBCF",
-      Gameswift: "#E7E9ED",
-      "SX Network": "#36A2EB",
-      "Event Horizon": "#FF6384",
-      Arenaz: "#FFCE56",
-      "Edu Chain": "#4BC0C0",
-      Caldera: "#EC6731",
-      Other: "#999999", // Color for 'Other' slice
-    };
-    return colorMap[chainName] || getRandomColor();
+    return chainColorMap[chainName] || "#000000"; // default to black if not found
   };
-
-  const getRandomColor = () => {
-    const letters = "0123456789ABCDEF";
-    let color = "#";
-    for (let i = 0; i < 6; i++) {
-      color += letters[Math.floor(Math.random() * 16)];
-    }
-    return color;
-  };
-
-  // Calculate total transactions of all chains
-  const totalTransactionsAllChains = allChains.reduce((sum, chain) => {
-    const chainTransactions = transactionsByChainDate[chain.name] || {};
-    return (
-      sum +
-      Object.values(chainTransactions).reduce(
-        (chainSum, val) => chainSum + val,
-        0
-      )
-    );
-  }, 0);
-
-  // Calculate total transactions for the top 10 chains
-  const totalTransactionsTopChains = topChainsList.reduce((sum, chain) => {
-    return sum + chain.total;
-  }, 0);
 
   // Format total transactions
-  const formattedTotalTransactions = formatNumber(
+  const formattedTotalTransactions = abbreviateNumber(
     totalTransactionsAllChains,
     2
   );
@@ -513,7 +705,7 @@ const DailyTransactionsPage = () => {
   // Data for RaaS Pie Chart
   const raasLabels = Object.keys(transactionsByRaas);
   const raasData = raasLabels.map((raas) => transactionsByRaas[raas]);
-  const raasColors = raasLabels.map((raas) => {
+  const raasColors = raasLabels.map((raas, index) => {
     const colorMap = {
       Gelato: "#ff3b57",
       Conduit: "#46BDC6",
@@ -521,7 +713,7 @@ const DailyTransactionsPage = () => {
       Caldera: "#EC6731",
       Altlayer: "#B28AFE",
     };
-    return colorMap[raas] || getRandomColor();
+    return colorMap[raas] || COLORS[index % COLORS.length];
   });
 
   const raasPieData = {
@@ -536,30 +728,55 @@ const DailyTransactionsPage = () => {
     ],
   };
 
-  // Data for Top Chains Pie Chart
-  // Include "Other" as the 11th slice
-  const otherChainsTotal =
-    totalTransactionsAllChains - totalTransactionsTopChains;
-  const topChainsData = topChainsList.map((chain) => chain.total);
-  const topChainsLabels = topChainsList.map((chain) => chain.name);
-  topChainsLabels.push("Other");
-  topChainsData.push(otherChainsTotal);
+  // Use useMemo to calculate topChainsPieData including "Other" slice
+  const topChainsPieData = useMemo(() => {
+    const otherChainsTotal =
+      totalTransactionsAllChains - totalTransactionsTopChains;
+    if (topChainsList.length === 0) return null;
+    const topChainsData = topChainsList.map((chain) => chain.total);
+    const topChainsLabels = topChainsList.map((chain) => chain.name);
+    topChainsLabels.push("Other");
+    topChainsData.push(otherChainsTotal);
 
-  const topChainsPieData = {
-    labels: topChainsLabels,
-    datasets: [
-      {
-        data: topChainsData,
-        backgroundColor: topChainsLabels.map((label) =>
-          getColorForChain(label)
-        ),
-        hoverBackgroundColor: topChainsLabels.map((label) =>
-          getColorForChain(label)
-        ), // Ensure colors don't change on hover
-        borderWidth: 0, // Remove white border
-      },
-    ],
+    return {
+      labels: topChainsLabels,
+      datasets: [
+        {
+          data: topChainsData,
+          backgroundColor: topChainsLabels.map((label, index) =>
+            label === "Other"
+              ? "#999999"
+              : getColorForChain(label) || COLORS[index % COLORS.length]
+          ),
+          hoverBackgroundColor: topChainsLabels.map((label, index) =>
+            label === "Other"
+              ? "#999999"
+              : getColorForChain(label) || COLORS[index % COLORS.length]
+          ), // Ensure colors don't change on hover
+          borderWidth: 0, // Remove white border
+        },
+      ],
+    };
+  }, [topChainsList, totalTransactionsAllChains, totalTransactionsTopChains]);
+
+  // Data for Top Chains Pie Chart is now correctly including "Other"
+
+  const getPeriodLabel = () => {
+    if (timeRange === "Daily") {
+      return "Yesterday";
+    } else if (timeUnit === "Daily") {
+      return timeRange;
+    } else if (timeUnit === "Monthly") {
+      return timeRange;
+    } else {
+      return "Selected Period";
+    }
   };
+
+  const raasPieChartLabel =
+    selectedRaas !== "All Raas"
+      ? "RaaS Providers Market Share (All Time)"
+      : `RaaS Providers Market Share (${getPeriodLabel()})`;
 
   return (
     <div className="performance-page">
@@ -632,7 +849,7 @@ const DailyTransactionsPage = () => {
               <p>Total Transactions: {formattedTotalTransactions}</p>
               <p>
                 The top 10 chains contribute <strong>{percentageShare}%</strong>{" "}
-                of all transactions so far.
+                of all transactions {getPeriodLabel()}.
               </p>
             </div>
 
@@ -680,7 +897,9 @@ const DailyTransactionsPage = () => {
                   },
                   title: {
                     display: true,
-                    text: `Transactions - ${timeRange}`,
+                    text: `${timeUnit} Transactions - ${
+                      timeRange === "Daily" ? "All Time" : timeRange
+                    }`,
                     color: "#FFFFFF",
                   },
                   tooltip: {
@@ -697,7 +916,7 @@ const DailyTransactionsPage = () => {
                         if (chartType === "percentage") {
                           value = value + "%";
                         } else {
-                          value = abbreviateNumber(value);
+                          value = abbreviateNumber(value, 2);
                         }
                         return `${label}: ${value}`;
                       },
@@ -740,7 +959,7 @@ const DailyTransactionsPage = () => {
                       callback: function (value) {
                         return chartType === "percentage"
                           ? value + "%"
-                          : abbreviateNumber(value);
+                          : abbreviateNumber(value, 2);
                       },
                     },
                   },
@@ -766,13 +985,13 @@ const DailyTransactionsPage = () => {
                     <th>Chain</th>
                     <th>RaaS</th> {/* New RaaS Column */}
                     <th>
-                      Daily Transactions{" "}
+                      Transactions ({getPeriodLabel()})
                       <button onClick={handleSort}>
                         <FontAwesomeIcon icon={faSort} />
                       </button>
                     </th>
                     <th>Vertical</th>
-                    <th>30d %</th>
+                    <th>30d %</th> {/* Fixed 30d % Column */}
                   </tr>
                 </thead>
                 <tbody>
@@ -798,16 +1017,18 @@ const DailyTransactionsPage = () => {
                         </div>
                       </td>
                       <td>{chain.chainRaas}</td> {/* Display RaaS */}
-                      <td>{formatNumber(chain.dailyTransactions)}</td>
+                      <td>{abbreviateNumber(chain.transactions, 2)}</td>
                       <td>{chain.chainVertical}</td>
                       <td
                         className={
-                          chain.percentageIncrease30d >= 0
+                          chain.percentageIncrease >= 0
                             ? "positive"
                             : "negative"
                         }
                       >
-                        {chain.percentageIncrease30d.toFixed(2)}%
+                        {chain.percentageIncrease !== null
+                          ? chain.percentageIncrease.toFixed(2) + "%"
+                          : "N/A"}
                       </td>
                     </tr>
                   ))}
@@ -824,7 +1045,7 @@ const DailyTransactionsPage = () => {
             <div className="pie-charts-container">
               {/* Top Chains Pie Chart */}
               <div className="pie-chart-card">
-                <h4>Top 10 Chains Market Share</h4>
+                <h4>Top 10 Chains Market Share ({getPeriodLabel()})</h4>
                 {topChainsPieData && (
                   <Pie
                     data={topChainsPieData}
@@ -847,7 +1068,7 @@ const DailyTransactionsPage = () => {
                                     100
                                   ).toFixed(2)
                                 : 0;
-                              const formattedValue = abbreviateNumber(value);
+                              const formattedValue = abbreviateNumber(value, 2);
                               return `${label}: ${formattedValue} (${percentage}%)`;
                             },
                           },
@@ -862,7 +1083,7 @@ const DailyTransactionsPage = () => {
               </div>
               {/* RaaS Pie Chart */}
               <div className="pie-chart-card">
-                <h4>RaaS Providers Market Share</h4>
+                <h4>{raasPieChartLabel}</h4>
                 {raasPieData && (
                   <Pie
                     data={raasPieData}
@@ -879,13 +1100,17 @@ const DailyTransactionsPage = () => {
                             label: function (context) {
                               const label = context.label || "";
                               const value = context.parsed || 0;
-                              const percentage = totalTransactionsAllChains
+                              const totalRaasTransactions = raasData.reduce(
+                                (sum, val) => sum + val,
+                                0
+                              );
+                              const percentage = totalRaasTransactions
                                 ? (
-                                    (value / totalTransactionsAllChains) *
+                                    (value / totalRaasTransactions) *
                                     100
                                   ).toFixed(2)
                                 : 0;
-                              const formattedValue = abbreviateNumber(value);
+                              const formattedValue = abbreviateNumber(value, 2);
                               return `${label}: ${formattedValue} (${percentage}%)`;
                             },
                           },

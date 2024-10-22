@@ -2,7 +2,7 @@
 
 import React, { useContext, useEffect, useState } from "react";
 import moment from "moment";
-import "./TopChains.css";
+import "./TopChains.css"; // Assuming you have a separate CSS for TopChains
 import { DataContext } from "../Charts/context/DataContext"; // Import DataContext
 
 // Importing logos
@@ -167,21 +167,8 @@ const TopChains = () => {
       console.log(`Previous Month (${previousMonthKey}): ${previousMonthTx}`);
       console.log(`Current Month (${lastMonthKey}): ${currentMonthTx}`);
 
-      let percentageIncrease = "N/A";
-      if (previousMonthTx > 0) {
-        percentageIncrease =
-          (
-            ((currentMonthTx - previousMonthTx) / previousMonthTx) *
-            100
-          ).toFixed(2) + "%";
-      } else if (previousMonthTx === 0 && currentMonthTx > 0) {
-        percentageIncrease = "N/A"; // Cannot calculate percentage increase from zero
-      } else {
-        percentageIncrease = "0%";
-      }
-
-      console.log(`Calculated Percentage Increase: ${percentageIncrease}`);
-
+      // Removed percentageIncrease calculation
+      // Calculate market share
       let marketShare = "0%";
       if (calculatedTotalTxCombined > 0) {
         marketShare =
@@ -201,7 +188,7 @@ const TopChains = () => {
       return {
         ...chain,
         marketShare,
-        percentageIncrease,
+        // Removed percentageIncrease
         raas: normalizedRaas || "Unknown",
         da: normalizedDA || "Unknown",
         framework: normalizedFramework || "Unknown",
@@ -218,7 +205,7 @@ const TopChains = () => {
     );
 
     allMonths.sort((a, b) => {
-      return moment(a, "YYYY-MM").toDate() - moment(b, "YYYY-MM").toDate();
+      return moment(a).diff(moment(b));
     });
 
     const lastMonth = allMonths[allMonths.length - 1];
@@ -268,9 +255,7 @@ const TopChains = () => {
               <p className="chain-market-share">
                 Market Share: {chain.marketShare}
               </p>
-              <p className="chain-percentage-increase">
-                % Increase Since Last Month: {chain.percentageIncrease}
-              </p>
+              {/* Removed percentageIncrease display */}
               <div className="chain-badges">
                 <Badge
                   logo={raasLogos[chain.raas]}

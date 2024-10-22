@@ -72,7 +72,7 @@ export const fetchBlockExplorerData = async (blockScoutUrl, launchDate) => {
 };
 
 // Fetch transactions across all chains in parallel
-export const fetchAllTransactions = async (sheetData) => {
+export const fetchAllTransaction = async (sheetData) => {
   let totalTransactionsCombined = 0;
   const transactionsByChainDate = {};
 
