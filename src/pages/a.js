@@ -8,7 +8,7 @@ import "./FrameworkPage.css";
 import { Pie, Bar } from "react-chartjs-2";
 import {
   fetchGoogleSheetData,
-  fetchAllTransaction,
+  fetchAllTransactions,
   fetchAllTvlData,
   fetchAllActiveAccounts,
 } from "../services/googleSheetService";
@@ -49,11 +49,6 @@ const FrameworkPage = () => {
     {}
   );
   const [frameworkByVerticalData, setFrameworkByVerticalData] = useState({});
-  const [frameworkCounts, setFrameworkCounts] = useState({});
-  const [daCounts, setDaCounts] = useState({});
-  const [l2L3Counts, setL2L3Counts] = useState({});
-  const [daByFrameworkData, setDaByFrameworkData] = useState({});
-  const [l2L3ByFrameworkData, setL2L3ByFrameworkData] = useState({});
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -63,8 +58,11 @@ const FrameworkPage = () => {
   const [transactionCountByFrameworkData, setTransactionCountByFrameworkData] =
     useState({});
   const [tvlByFrameworkData, setTvlByFrameworkData] = useState({});
-  const [frameworkByVerticalDataState, setFrameworkByVerticalDataState] =
-    useState({});
+  const [frameworkCounts, setFrameworkCounts] = useState({});
+  const [daCounts, setDaCounts] = useState({});
+  const [l2L3Counts, setL2L3Counts] = useState({});
+  const [daByFrameworkData, setDaByFrameworkData] = useState({});
+  const [l2L3ByFrameworkData, setL2L3ByFrameworkData] = useState({});
 
   // Table Data
   const [tableData, setTableData] = useState([]);
@@ -113,7 +111,7 @@ const FrameworkPage = () => {
         console.log("🚀 Fetching new data from Google Sheets and APIs...");
         // Fetch new data
         const sheetData = await fetchGoogleSheetData();
-        const transactionsData = await fetchAllTransaction(sheetData);
+        const transactionsData = await fetchAllTransactions(sheetData);
         const tvlData = await fetchAllTvlData(sheetData);
         const activeAccountsData = await fetchAllActiveAccounts(sheetData);
 
@@ -168,21 +166,11 @@ const FrameworkPage = () => {
     setRaasOptions(uniqueRaas);
   };
 
-  // Function to standardize L2/L3 values
-  const standardizeL2L3 = (value) => {
-    if (!value) return "Unknown";
-    const lowerValue = value.trim().toLowerCase();
-    if (lowerValue === "l2" || lowerValue === "layer 2") return "L2";
-    if (lowerValue === "l3" || lowerValue === "layer 3") return "L3";
-    return "Unknown";
-  };
-
   // Process data whenever relevant state changes
   useEffect(() => {
     if (!loading && allChains.length) {
       processChartsData();
       processTableData();
-      // Removed calculateFrameworkShare as Frameworks Share chart is removed
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -195,6 +183,7 @@ const FrameworkPage = () => {
     tableFilter,
   ]);
 
+  // Function to process data for charts
   // Function to process data for charts
   const processChartsData = () => {
     // Filter chains based on selected RaaS
@@ -248,85 +237,23 @@ const FrameworkPage = () => {
     });
     setTvlByFrameworkData(tvlByFramework);
 
-    // 4. Framework by Vertical
+    // Framework by Vertical
     const frameworkByVertical = {};
     filteredChains.forEach((chain) => {
       const framework = chain.framework || "Unknown";
       const vertical = chain.vertical || "Unknown";
       if (!frameworkByVertical[framework]) {
-        frameworkByVertical[framework] = { verticals: {}, chains: {} };
+        frameworkByVertical[framework] = {};
       }
-      if (!frameworkByVertical[framework].verticals[vertical]) {
-        frameworkByVertical[framework].verticals[vertical] = 0;
-        frameworkByVertical[framework].chains[vertical] = [];
+      if (!frameworkByVertical[framework][vertical]) {
+        frameworkByVertical[framework][vertical] = 0;
       }
-      frameworkByVertical[framework].verticals[vertical] += 1;
-      frameworkByVertical[framework].chains[vertical].push(chain.name); // Track chain names
+      frameworkByVertical[framework][vertical] += 1;
     });
     setFrameworkByVerticalData(frameworkByVertical);
-
-    // 5. DA Counts
-    const daCountTemp = {};
-    filteredChains.forEach((chain) => {
-      const da = chain.da || "Unknown";
-      if (!daCountTemp[da]) {
-        daCountTemp[da] = 0;
-      }
-      daCountTemp[da] += 1;
-    });
-    setDaCounts(daCountTemp);
-
-    // 6. L2/L3 Counts
-    const l2L3CountTemp = {};
-    filteredChains.forEach((chain) => {
-      let l2L3 = chain.l2OrL3 || "Unknown"; // Corrected field name
-      l2L3 = standardizeL2L3(l2L3); // Standardize the l2L3 value
-      if (!l2L3CountTemp[l2L3]) {
-        l2L3CountTemp[l2L3] = 0;
-      }
-      l2L3CountTemp[l2L3] += 1;
-    });
-    setL2L3Counts(l2L3CountTemp);
-
-    // 7. DA by Framework
-    const daByFrameworkTemp = {};
-    filteredChains.forEach((chain) => {
-      const framework = chain.framework || "Unknown";
-      const da = chain.da || "Unknown";
-      if (!daByFrameworkTemp[framework]) {
-        daByFrameworkTemp[framework] = {};
-      }
-      if (!daByFrameworkTemp[framework][da]) {
-        daByFrameworkTemp[framework][da] = { count: 0, chains: [] };
-      }
-      daByFrameworkTemp[framework][da].count += 1;
-      daByFrameworkTemp[framework][da].chains.push(chain.name);
-    });
-    setDaByFrameworkData(daByFrameworkTemp);
-
-    // 8. L2/L3 by Framework
-    const l2L3ByFrameworkTemp = {};
-    filteredChains.forEach((chain) => {
-      const framework = chain.framework || "Unknown";
-      let l2L3 = chain.l2OrL3 || "Unknown"; // Corrected field name
-      l2L3 = standardizeL2L3(l2L3); // Standardize the l2L3 value
-      if (!l2L3ByFrameworkTemp[framework]) {
-        l2L3ByFrameworkTemp[framework] = {};
-      }
-      if (!l2L3ByFrameworkTemp[framework][l2L3]) {
-        l2L3ByFrameworkTemp[framework][l2L3] = { count: 0, chains: [] };
-      }
-      l2L3ByFrameworkTemp[framework][l2L3].count += 1;
-      l2L3ByFrameworkTemp[framework][l2L3].chains.push(chain.name);
-    });
-    setL2L3ByFrameworkData(l2L3ByFrameworkTemp);
-
-    // Debugging: Log the processed L2/L3 data
-    console.log("L2/L3 Counts:", l2L3CountTemp);
-    console.log("L2/L3 by Framework:", l2L3ByFrameworkTemp);
   };
 
-  // Function to process table data
+  // Function to process data for the table
   const processTableData = () => {
     // Aggregate data per framework
     const frameworkData = {};
@@ -424,27 +351,30 @@ const FrameworkPage = () => {
           label: function (context) {
             let label = "";
 
+            // For pie chart, keep showing the label with percentage
             if (isPieChart) {
               label = context.label || "";
               const value = context.raw;
               const total = context.dataset.data.reduce(
-                (acc, val) => acc + parseFloat(val),
+                (acc, val) => acc + val,
                 0
               );
-              const percentage =
-                total > 0 ? ((value / total) * 100).toFixed(2) : 0;
+              const percentage = ((value / total) * 100).toFixed(2);
               return `${label}: ${percentage}% (${abbreviateNumber(value, 2)})`;
-            } else {
-              const datasetLabel = context.dataset.label || "";
+            }
+
+            // For bar chart, remove framework name and display relevant Y-axis information
+            else {
+              const verticalLabel = context.dataset.label || ""; // This will give the relevant Y-axis information like DA, vertical, etc.
               const value = context.raw || 0;
               const chainNames = context.dataset.meta
                 ? context.dataset.meta[context.dataIndex]
-                : [];
+                : []; // Chain names for the hovered bar
 
               let tooltipLines = [
-                `${datasetLabel}: ${abbreviateNumber(value, 2)}`,
+                `${verticalLabel}: ${abbreviateNumber(value, 2)}`,
               ];
-              if (chainNames.length) {
+              if (chainNames && chainNames.length) {
                 tooltipLines.push("Chains:");
                 tooltipLines = tooltipLines.concat(chainNames);
               }
@@ -512,8 +442,6 @@ const FrameworkPage = () => {
   };
 
   // Generate data for each chart
-
-  // 1. Chains by Framework Pie Chart
   const getChainsByFrameworkChartData = () => {
     const labels = Object.keys(chainsByFrameworkData);
     const data = Object.values(chainsByFrameworkData);
@@ -529,7 +457,6 @@ const FrameworkPage = () => {
     };
   };
 
-  // 2. Transaction Count by Framework Bar Chart
   const getTransactionCountByFrameworkChartData = (showPercentage = false) => {
     const labels = Object.keys(transactionCountByFrameworkData);
     const dataValues = Object.values(transactionCountByFrameworkData);
@@ -538,9 +465,7 @@ const FrameworkPage = () => {
 
     if (showPercentage) {
       const total = dataValues.reduce((acc, val) => acc + val, 0);
-      data = dataValues.map((val) =>
-        total > 0 ? ((val / total) * 100).toFixed(2) : 0
-      );
+      data = dataValues.map((val) => (val / total) * 100);
     }
 
     return {
@@ -555,7 +480,6 @@ const FrameworkPage = () => {
     };
   };
 
-  // 3. TVL by Framework Bar Chart
   const getTvlByFrameworkChartData = (showPercentage = false) => {
     const labels = Object.keys(tvlByFrameworkData);
     const dataValues = Object.values(tvlByFrameworkData);
@@ -564,9 +488,7 @@ const FrameworkPage = () => {
 
     if (showPercentage) {
       const total = dataValues.reduce((acc, val) => acc + val, 0);
-      data = dataValues.map((val) =>
-        total > 0 ? ((val / total) * 100).toFixed(2) : 0
-      );
+      data = dataValues.map((val) => (val / total) * 100);
     }
 
     return {
@@ -581,7 +503,64 @@ const FrameworkPage = () => {
     };
   };
 
-  // 4. DA by Framework Bar Chart
+  // Framework by Vertical Bar Chart Data
+  const getFrameworkByVerticalBarChartData = () => {
+    const labels = Object.keys(frameworkByVerticalData);
+    const verticalsSet = new Set();
+    labels.forEach((framework) => {
+      Object.keys(frameworkByVerticalData[framework]).forEach((vertical) =>
+        verticalsSet.add(vertical)
+      );
+    });
+    const verticals = Array.from(verticalsSet);
+
+    const datasets = verticals.map((vertical, idx) => {
+      const data = labels.map((framework) => {
+        return frameworkByVerticalData[framework][vertical] || 0;
+      });
+      return {
+        label: vertical,
+        data,
+        backgroundColor: getColorByIndex(idx),
+      };
+    });
+
+    return {
+      labels,
+      datasets,
+    };
+  };
+
+  // Framework by Vertical Pie Chart Data
+  const getFrameworkByVerticalPieChartData = () => {
+    const frameworkLabels = Object.keys(frameworkByVerticalData);
+    const verticalData = {};
+
+    frameworkLabels.forEach((framework) => {
+      Object.keys(frameworkByVerticalData[framework]).forEach((vertical) => {
+        if (!verticalData[vertical]) {
+          verticalData[vertical] = 0;
+        }
+        verticalData[vertical] += frameworkByVerticalData[framework][vertical];
+      });
+    });
+
+    const labels = Object.keys(verticalData);
+    const data = Object.values(verticalData);
+
+    return {
+      labels,
+      datasets: [
+        {
+          label: "Vertical Distribution",
+          data,
+          backgroundColor: labels.map((_, idx) => getColorByIndex(idx)),
+        },
+      ],
+    };
+  };
+
+  // DA Charts Data
   const getDaByFrameworkChartData = () => {
     const labels = Object.keys(daByFrameworkData);
     const daSet = new Set();
@@ -602,7 +581,7 @@ const FrameworkPage = () => {
       return {
         label: daProvider,
         data,
-        meta, // Store chains separately for tooltips
+        meta, // Store chains separately
         backgroundColor: getColorByIndex(idx),
       };
     });
@@ -613,7 +592,6 @@ const FrameworkPage = () => {
     };
   };
 
-  // 5. DA Share Pie Chart
   const getDaShareChartData = () => {
     const labels = Object.keys(daCounts);
     const data = Object.values(daCounts);
@@ -630,7 +608,7 @@ const FrameworkPage = () => {
     };
   };
 
-  // 6. L2/L3 by Framework Bar Chart
+  // L2/L3 Charts Data
   const getL2L3ByFrameworkChartData = () => {
     const labels = Object.keys(l2L3ByFrameworkData);
     const l2L3Set = new Set();
@@ -639,10 +617,7 @@ const FrameworkPage = () => {
         l2L3Set.add(l2L3)
       );
     });
-    // Ensure only L2 and L3 are included
-    const l2L3Types = Array.from(l2L3Set).filter(
-      (type) => type === "L2" || type === "L3"
-    );
+    const l2L3Types = Array.from(l2L3Set);
 
     const datasets = l2L3Types.map((l2L3, idx) => {
       const data = labels.map((framework) => {
@@ -656,7 +631,7 @@ const FrameworkPage = () => {
       return {
         label: l2L3,
         data,
-        meta, // Store chains separately for tooltips
+        meta, // Store chains separately
         backgroundColor: getColorByIndex(idx),
       };
     });
@@ -667,12 +642,9 @@ const FrameworkPage = () => {
     };
   };
 
-  // 7. L2/L3 Share Pie Chart
   const getL2L3ShareChartData = () => {
-    const labels = Object.keys(l2L3Counts).filter(
-      (type) => type === "L2" || type === "L3"
-    );
-    const data = labels.map((label) => l2L3Counts[label]);
+    const labels = Object.keys(l2L3Counts);
+    const data = Object.values(l2L3Counts);
 
     return {
       labels,
@@ -686,77 +658,26 @@ const FrameworkPage = () => {
     };
   };
 
-  // 8. Framework by Vertical Bar Chart
-  const getFrameworkByVerticalBarChartData = () => {
-    const labels = Object.keys(frameworkByVerticalData);
-    const verticalsSet = new Set();
-    labels.forEach((framework) => {
-      Object.keys(frameworkByVerticalData[framework].verticals).forEach(
-        (vertical) => verticalsSet.add(vertical)
-      );
-    });
-    const verticals = Array.from(verticalsSet);
-
-    const datasets = verticals.map((vertical, idx) => {
-      const data = labels.map((framework) => {
-        return frameworkByVerticalData[framework].verticals[vertical] || 0;
-      });
-      const meta = labels.map((framework) => {
-        return frameworkByVerticalData[framework].chains[vertical] || [];
-      });
-
-      return {
-        label: vertical,
-        data,
-        meta, // Include chains in meta for tooltips
-        backgroundColor: getColorByIndex(idx),
-      };
-    });
-
-    return {
-      labels,
-      datasets,
-    };
+  // Function to handle RaaS selection
+  const handleRaasChange = (value) => {
+    setSelectedRaas(value);
   };
 
-  // 9. Framework by Vertical Pie Chart
-  const getFrameworkByVerticalPieChartData = () => {
-    const frameworkLabels = Object.keys(frameworkByVerticalData);
-    const verticalData = {};
-
-    frameworkLabels.forEach((framework) => {
-      Object.keys(frameworkByVerticalData[framework].verticals).forEach(
-        (vertical) => {
-          if (!verticalData[vertical]) {
-            verticalData[vertical] = 0;
-          }
-          verticalData[vertical] +=
-            frameworkByVerticalData[framework].verticals[vertical];
-        }
-      );
-    });
-
-    const labels = Object.keys(verticalData);
-    const data = Object.values(verticalData);
+  // Frameworks Share Pie Chart Data
+  const getFrameworkShareChartData = () => {
+    const labels = Object.keys(frameworkCounts);
+    const data = Object.values(frameworkCounts);
 
     return {
       labels,
       datasets: [
         {
-          label: "Vertical Distribution",
+          label: "Frameworks Share",
           data,
           backgroundColor: labels.map((_, idx) => getColorByIndex(idx)),
         },
       ],
     };
-  };
-
-  // 10. Framework Share Pie Chart
-  // Removed as per your previous request
-
-  // Function to handle RaaS selection
-  const handleRaasChange = (value) => {
-    setSelectedRaas(value);
   };
 
   return (
@@ -951,7 +872,6 @@ const FrameworkPage = () => {
 
               {/* DA Charts */}
               <div className="charts-row">
-                {/* DA by Framework */}
                 <div className="chart-card half-width">
                   <h3>DA by Framework</h3>
                   <Bar
@@ -960,8 +880,6 @@ const FrameworkPage = () => {
                     height={300} // Optional: Adjust height as needed
                   />
                 </div>
-
-                {/* DA Share */}
                 <div className="chart-card half-width">
                   <h3>DA Share</h3>
                   <Pie
@@ -973,7 +891,6 @@ const FrameworkPage = () => {
 
               {/* L2/L3 Charts */}
               <div className="charts-row">
-                {/* L2/L3 by Framework */}
                 <div className="chart-card half-width">
                   <h3>L2/L3 by Framework</h3>
                   <Bar
@@ -982,8 +899,6 @@ const FrameworkPage = () => {
                     height={300} // Optional: Adjust height as needed
                   />
                 </div>
-
-                {/* L2/L3 Share */}
                 <div className="chart-card half-width">
                   <h3>L2/L3 Share</h3>
                   <Pie
@@ -992,7 +907,6 @@ const FrameworkPage = () => {
                   />
                 </div>
               </div>
-
               {/* Framework by Vertical Charts */}
               <div className="charts-row">
                 {/* Framework by Vertical Bar Chart */}

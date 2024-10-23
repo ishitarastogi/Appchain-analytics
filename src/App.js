@@ -8,6 +8,7 @@ import TPSPage from "./pages/TPS"; // Import the new TPSPage component
 import TVLPage from "./pages/TVL";
 import EcosystemPage from "./pages/EcosystemPage";
 import Framework from "./pages/Framework";
+import DataAvaliability from "./pages/DataAvaliability";
 
 const App = () => {
   return (
@@ -20,6 +21,7 @@ const App = () => {
         <Route path="/tvl" element={<TVLPage />} /> {/* New Route */}
         <Route path="/vertical" element={<EcosystemPage />} /> {/* New Route */}
         <Route path="/framework" element={<Framework />} /> {/* New Route */}
+        <Route path="/da" element={<DataAvaliability />} /> {/* New Route */}
       </Routes>
     </Router>
   );
