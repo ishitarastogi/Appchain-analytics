@@ -87,7 +87,7 @@ const DailyTransactionsPage = () => {
       setLoading(true); // Start loading
       try {
         // Retrieve data from IndexedDB
-        await clearAllData(); // Uncomment to clear IndexedDB for testing
+        // await clearAllData(); // Uncomment to clear IndexedDB for testing
         console.log("🔍 Attempting to retrieve data from IndexedDB...");
         const storedRecord = await getData(DAILY_DATA_ID);
 

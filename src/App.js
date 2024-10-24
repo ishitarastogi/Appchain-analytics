@@ -9,6 +9,8 @@ import TVLPage from "./pages/TVL";
 import EcosystemPage from "./pages/EcosystemPage";
 import Framework from "./pages/Framework";
 import DataAvaliability from "./pages/DataAvaliability";
+import L2L3Page from "./pages/L2L3Page";
+import RaasPage from "./pages/RaasPage";
 
 const App = () => {
   return (
@@ -22,6 +24,8 @@ const App = () => {
         <Route path="/vertical" element={<EcosystemPage />} /> {/* New Route */}
         <Route path="/framework" element={<Framework />} /> {/* New Route */}
         <Route path="/da" element={<DataAvaliability />} /> {/* New Route */}
+        <Route path="/layer" element={<L2L3Page />} /> {/* New Route */}
+        <Route path="/raas" element={<RaasPage />} /> {/* New Route */}
       </Routes>
     </Router>
   );

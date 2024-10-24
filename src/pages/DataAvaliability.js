@@ -1,6 +1,6 @@
 /* src/pages/DataAvailabilityPage.js */
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChartPie } from "@fortawesome/free-solid-svg-icons";
@@ -8,12 +8,12 @@ import "./DataAvailabilityPage.css";
 import { Pie, Bar } from "react-chartjs-2";
 import {
   fetchGoogleSheetData,
-  fetchAllTransactions,
+  fetchAllTransaction, // Use the singular function
   fetchAllTvlData,
   fetchAllActiveAccounts,
-} from "../services/googleSheetService";
+} from "../services/googleSheetService"; // Ensure consistent import
 import { abbreviateNumber } from "../utils/numberFormatter";
-import { saveData, getData } from "../services/indexedDBService";
+import { saveData, getData, clearAllData } from "../services/indexedDBService";
 
 // Register required components for Chart.js
 import {
@@ -44,12 +44,17 @@ const DataAvailabilityPage = () => {
   const [selectedRaas, setSelectedRaas] = useState("All Raas");
   const [allChains, setAllChains] = useState([]);
 
+  // Updated state variables to match fetchAllTransaction
   const [transactionsByChainDate, setTransactionsByChainDate] = useState({});
+  const [approximateDataByChainDate, setApproximateDataByChainDate] = useState(
+    {}
+  );
+  const [totalTransactionsCombined, setTotalTransactionsCombined] = useState(0);
+
   const [tvlDataByChainDate, setTvlDataByChainDate] = useState({});
   const [activeAccountsByChainDate, setActiveAccountsByChainDate] = useState(
     {}
   );
-  const [chainCounts, setChainCounts] = useState({});
 
   const [daCounts, setDaCounts] = useState({});
   const [verticalCounts, setVerticalCounts] = useState({});
@@ -64,9 +69,6 @@ const DataAvailabilityPage = () => {
   const [chainsByDaVertical, setChainsByDaVertical] = useState({});
   const [chainsByDaFramework, setChainsByDaFramework] = useState({});
 
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
   // Table Data
   const [tableData, setTableData] = useState([]);
 
@@ -75,6 +77,10 @@ const DataAvailabilityPage = () => {
   const [showPercentageVertical, setShowPercentageVertical] = useState(false);
   const [showPercentageL2L3, setShowPercentageL2L3] = useState(false);
   const [showPercentageFramework, setShowPercentageFramework] = useState(false);
+
+  // Loading and Error States
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   // Define RaasDropdown inside component
   const RaasDropdown = ({ options, selected, onChange }) => {
@@ -99,56 +105,84 @@ const DataAvailabilityPage = () => {
     return JSON.stringify(obj1) === JSON.stringify(obj2);
   };
 
+  // Define fetchData outside useEffect using useCallback to prevent re-creation
+  const fetchData = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Retrieve data from IndexedDB
+      const storedRecord = await getData(DATA_AVAILABILITY_DATA_ID);
+      const sixHoursAgo = Date.now() - SIX_HOURS_IN_MS;
+
+      if (storedRecord && storedRecord.timestamp > sixHoursAgo) {
+        // Use stored data if it's less than 6 hours old
+        console.log("📦 Using cached data from IndexedDB.", storedRecord.data);
+        populateStateWithData(storedRecord.data);
+        setLoading(false);
+        return;
+      }
+
+      console.log("🚀 Fetching new data from Google Sheets and APIs...");
+      // Fetch new data
+      const sheetData = await fetchGoogleSheetData();
+      const transactionData = await fetchAllTransaction(sheetData); // Use fetchAllTransaction
+      const tvlData = await fetchAllTvlData(sheetData);
+      const activeAccountsData = await fetchAllActiveAccounts(sheetData);
+
+      console.log("Fetched Data:", {
+        sheetData,
+        transactionData,
+        tvlData,
+        activeAccountsData,
+      }); // Added for debugging
+
+      const newData = {
+        sheetData,
+        transactionData, // Updated key
+        tvlData,
+        activeAccountsData,
+      };
+
+      // Save new data with timestamp to IndexedDB
+      await saveData(DATA_AVAILABILITY_DATA_ID, newData);
+
+      populateStateWithData(newData);
+    } catch (err) {
+      console.error("❌ Error fetching data:", err);
+      setError(`Failed to load data availability data: ${err.message}`);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   // Fetch and cache data on component mount
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // Retrieve data from IndexedDB
-        const storedRecord = await getData(DATA_AVAILABILITY_DATA_ID);
-        const sixHoursAgo = Date.now() - SIX_HOURS_IN_MS;
-
-        if (storedRecord && storedRecord.timestamp > sixHoursAgo) {
-          // Use stored data if it's less than 6 hours old
-          console.log("📦 Using cached data from IndexedDB.");
-          populateStateWithData(storedRecord.data);
-          setLoading(false);
-          return;
-        }
-
-        console.log("🚀 Fetching new data from Google Sheets and APIs...");
-        // Fetch new data
-        const sheetData = await fetchGoogleSheetData();
-        const transactionsData = await fetchAllTransactions(sheetData);
-        const tvlData = await fetchAllTvlData(sheetData);
-        const activeAccountsData = await fetchAllActiveAccounts(sheetData);
-
-        const newData = {
-          sheetData,
-          transactionsData,
-          tvlData,
-          activeAccountsData,
-        };
-
-        // Save new data with timestamp to IndexedDB
-        await saveData(DATA_AVAILABILITY_DATA_ID, newData);
-
-        populateStateWithData(newData);
-      } catch (err) {
-        console.error("❌ Error fetching data:", err);
-        setError(`Failed to load data availability data: ${err.message}`);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchData]);
 
   // Function to populate state with fetched data
   const populateStateWithData = (data) => {
-    const { sheetData, transactionsData, tvlData, activeAccountsData } = data;
+    const { sheetData, transactionData, tvlData, activeAccountsData } = data;
+
+    // Defensive Checks
+    if (!transactionData) {
+      console.error("❌ transactionData is undefined.");
+      setError("Transaction data is missing.");
+      return;
+    }
+
+    if (
+      !transactionData.transactionsByChainDate ||
+      typeof transactionData.transactionsByChainDate !== "object"
+    ) {
+      console.error(
+        "❌ transactionsByChainDate is missing or not an object in transactionData.",
+        transactionData
+      );
+      setError("Invalid transaction data structure.");
+      return;
+    }
+
+    // Similarly, add checks for tvlData and activeAccountsData if necessary
 
     // Filter chains with status "Mainnet"
     const mainnetChains = sheetData.filter(
@@ -157,8 +191,11 @@ const DataAvailabilityPage = () => {
 
     setAllChains(mainnetChains);
 
-    // Assign data to state
-    setTransactionsByChainDate(transactionsData.transactionsByChain);
+    // Updated data assignments
+    setTransactionsByChainDate(transactionData.transactionsByChainDate);
+    setApproximateDataByChainDate(transactionData.approximateDataByChainDate);
+    setTotalTransactionsCombined(transactionData.totalTransactionsCombined);
+
     setTvlDataByChainDate(tvlData.tvlDataByChainDate);
     setActiveAccountsByChainDate(activeAccountsData.activeAccountsByChainDate);
 
@@ -190,11 +227,13 @@ const DataAvailabilityPage = () => {
       processChartsData();
       processTableData();
     }
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     loading,
     allChains,
     transactionsByChainDate,
+    approximateDataByChainDate, // Added dependency
     tvlDataByChainDate,
     activeAccountsByChainDate,
     selectedRaas,
@@ -212,21 +251,7 @@ const DataAvailabilityPage = () => {
               chain.raas &&
               chain.raas.toLowerCase() === selectedRaas.toLowerCase()
           );
-    // Chain Counts
-    const chainCountTemp = {};
-    filteredChains.forEach((chain) => {
-      const chainName = chain.name || "Unknown";
-      if (!chainCountTemp[chainName]) {
-        chainCountTemp[chainName] = 0;
-      }
-      chainCountTemp[chainName] += 1;
-    });
 
-    if (!isEqual(chainCounts, chainCountTemp)) {
-      setChainCounts(chainCountTemp);
-    }
-
-    // 1. DA Counts
     // 1. DA Counts
     const daCountTemp = {};
     filteredChains.forEach((chain) => {
@@ -236,10 +261,6 @@ const DataAvailabilityPage = () => {
       }
       daCountTemp[da] += 1; // Increment the count for this DA provider
     });
-
-    if (!isEqual(daCounts, daCountTemp)) {
-      setDaCounts(daCountTemp);
-    }
 
     if (!isEqual(daCounts, daCountTemp)) {
       setDaCounts(daCountTemp);
@@ -486,9 +507,105 @@ const DataAvailabilityPage = () => {
     setTableData(tableDataLocal);
   };
 
-  // Generate chart options with custom tooltip including chain names
-  // Inside DataAvailabilityPage.js
+  // Generate chart options similar to EcosystemPage.js
+  const generateChartOptions = (
+    title,
+    isPieChart = false,
+    showPercentage = false,
+    legendPosition = "top"
+  ) => ({
+    responsive: true,
+    maintainAspectRatio: true, // Maintain aspect ratio for all charts
+    plugins: {
+      legend: {
+        display: true, // Ensure legends are displayed
+        position: legendPosition,
+        labels: {
+          color: "#FFFFFF",
+          // Adjust font size or other properties if needed
+        },
+      },
+      title: {
+        display: true,
+        text: title,
+        color: "#FFFFFF",
+      },
+      tooltip: {
+        callbacks: {
+          label: function (context) {
+            let label = "";
+            if (context.chart.data.labels) {
+              label = context.chart.data.labels[context.dataIndex] || "";
+            }
 
+            let value;
+            if (isPieChart) {
+              value = context.parsed;
+            } else {
+              value =
+                context.parsed && context.parsed.y !== undefined
+                  ? context.parsed.y
+                  : context.parsed;
+            }
+
+            let percentage;
+
+            if (isPieChart) {
+              const totalPie = context.dataset.data.reduce(
+                (acc, val) => acc + val,
+                0
+              );
+              percentage = ((value / totalPie) * 100).toFixed(2);
+              return `${label}: ${percentage}% (${abbreviateNumber(value, 2)})`;
+            } else {
+              const total = context.dataset.data.reduce(
+                (acc, val) => acc + val,
+                0
+              );
+              percentage = ((value / total) * 100).toFixed(2);
+              const meta = context.dataset.meta
+                ? context.dataset.meta[context.dataIndex]
+                : [];
+              let tooltipLines = [`${label}: ${abbreviateNumber(value, 2)}`];
+              if (meta && meta.length) {
+                tooltipLines.push("Chains:");
+                tooltipLines = tooltipLines.concat(meta);
+              }
+              return tooltipLines;
+            }
+          },
+        },
+        backgroundColor: "rgba(0,0,0,0.7)",
+        titleColor: "#FFFFFF",
+        bodyColor: "#FFFFFF",
+      },
+    },
+    scales: isPieChart
+      ? {} // No scales for pie charts
+      : {
+          x: {
+            stacked: true,
+            ticks: { color: "#FFFFFF" },
+            grid: { display: true },
+          },
+          y: {
+            stacked: true,
+            ticks: {
+              color: "#FFFFFF",
+              callback: function (value) {
+                if (showPercentage) {
+                  return value + "%";
+                } else {
+                  return abbreviateNumber(value, 2);
+                }
+              },
+            },
+            grid: { display: true },
+          },
+        },
+  });
+
+  // Generate chart options for bar charts with chains mapping
   const generateBarChartOptionsWithChains = (
     title,
     isPieChart = false,
@@ -874,6 +991,21 @@ const DataAvailabilityPage = () => {
     };
   };
 
+  // Uncomment the following lines in DataAvailabilityPage.js
+  // to enable the Clear Cache button for debugging purposes.
+
+  const clearCache = async () => {
+    try {
+      await clearAllData(DATA_AVAILABILITY_DATA_ID);
+      console.log("✅ Cached data cleared.");
+      // Refetch the data
+      await fetchData();
+    } catch (err) {
+      console.error("❌ Error clearing cache:", err);
+      setError(`Failed to clear cache: ${err.message}`);
+    }
+  };
+
   /**
    * DA Distribution by L2/L3 Pie Chart
    * Overall distribution of L2 vs L3
@@ -993,6 +1125,7 @@ const DataAvailabilityPage = () => {
   const daDistributionPieChartData = useMemo(() => {
     return getDaByVerticalPieChartData();
   }, [verticalCounts]);
+
   const daByChainsPieChartData = useMemo(() => {
     return getDaByChainsPieChartData();
   }, [daCounts]);
@@ -1021,6 +1154,8 @@ const DataAvailabilityPage = () => {
     <div className="data-availability-page">
       <Sidebar />
       <div className="main-content">
+        {/* <button onClick={clearCache}>Clear Cache</button> */}
+
         {/* Header */}
         <div className="data-availability-header">
           <div className="heading-container">
@@ -1131,11 +1266,9 @@ const DataAvailabilityPage = () => {
               </div>
 
               {/* Right Side: DA Distribution Pie Chart */}
-              {/* Right Side: DA Distribution Pie Chart for Chains */}
               <div className="right-section">
                 {/* DA Distribution by Chains Pie Chart */}
                 <div className="chart-card pie-chart-card half-width">
-                  <h3>DA Distribution by Chains</h3>
                   <Pie
                     data={daByChainsPieChartData}
                     options={generatePieChartOptions(
@@ -1156,7 +1289,6 @@ const DataAvailabilityPage = () => {
                 {/* DA vs. L2/L3 Bar Chart */}
                 <div className="chart-card bar-chart-card half-width">
                   <div className="chart-header">
-                    <h3>DA Distribution across L2/L3 Layers</h3>
                     <div className="toggle-percentage">
                       <label>
                         <input
@@ -1184,7 +1316,6 @@ const DataAvailabilityPage = () => {
 
                 {/* DA vs. L2/L3 Pie Chart */}
                 <div className="chart-card pie-chart-card half-width">
-                  <h3>DA Distribution by L2/L3 Percentage</h3>
                   <Pie
                     data={daByL2L3PieChartData}
                     options={generatePieChartOptions(
@@ -1200,7 +1331,6 @@ const DataAvailabilityPage = () => {
                 {/* DA vs. Vertical Bar Chart */}
                 <div className="chart-card bar-chart-card half-width">
                   <div className="chart-header">
-                    <h3>DA Distribution across Verticals</h3>
                     <div className="toggle-percentage">
                       <label>
                         <input
@@ -1228,7 +1358,6 @@ const DataAvailabilityPage = () => {
 
                 {/* DA vs. Vertical Pie Chart */}
                 <div className="chart-card pie-chart-card half-width">
-                  <h3>DA Distribution by Vertical Percentage</h3>
                   <Pie
                     data={daByVerticalPieChartData}
                     options={generatePieChartOptions(
@@ -1244,7 +1373,6 @@ const DataAvailabilityPage = () => {
                 {/* DA vs. Framework Bar Chart */}
                 <div className="chart-card bar-chart-card half-width">
                   <div className="chart-header">
-                    <h3>DA Distribution across Frameworks</h3>
                     <div className="toggle-percentage">
                       <label>
                         <input
@@ -1272,7 +1400,6 @@ const DataAvailabilityPage = () => {
 
                 {/* DA vs. Framework Pie Chart */}
                 <div className="chart-card pie-chart-card half-width">
-                  <h3>DA Distribution by Framework Percentage</h3>
                   <Pie
                     data={daByFrameworkPieChartData}
                     options={generatePieChartOptions(

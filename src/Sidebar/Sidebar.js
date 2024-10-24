@@ -91,6 +91,16 @@ const Sidebar = () => {
             </Link>
           </li>
         </ul>
+        <li className="sidebar-category">
+          <FontAwesomeIcon icon={faCube} /> RaaS Stats
+        </li>
+        <ul>
+          <li>
+            <Link to="/raas" className="subcategory-link">
+              RaaS{" "}
+            </Link>
+          </li>
+        </ul>
       </ul>
     </nav>
   );
