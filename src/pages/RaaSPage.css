@@ -300,6 +300,9 @@
 
 /* Table Container */
 .table-container {
+  max-height: 500px; /* Added: Set max height to display up to 6 rows */
+  overflow-y: auto; /* Added: Enable vertical scrolling */
+  display: block; /* Added: Ensure the container respects max-height */
   overflow-x: auto;
 }
 
