@@ -22,10 +22,13 @@
     "moment": "^2.30.1",
     "moment-timezone": "^0.5.45",
     "react": "^18.3.1",
+    "react-calendar-timeline": "^0.28.0",
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^18.3.1",
+    "react-horizontal-timeline": "^1.5.3",
     "react-router-dom": "^6.26.2",
     "react-scripts": "5.0.1",
+    "react-tooltip": "^5.28.0",
     "recharts": "^2.12.7",
     "web-vitals": "^2.1.4"
   },

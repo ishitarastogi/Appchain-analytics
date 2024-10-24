@@ -815,31 +815,52 @@ const RaaSPage = () => {
                 <p>{averageTPS.toFixed(2)}</p>
               </div>
             </div>
+            <h3 style={{ marginLeft: "30px" }}>Launch Timeline</h3>
 
             {/* Launch Timeline Chart */}
             <div className="launch-timeline-section">
-              <h3>Launch Timeline</h3>
-              <div className="timeline-chart">
-                {launchTimelineData.map((item, index) => (
-                  <div key={index} className="timeline-item">
-                    <div className="timeline-date">
-                      {moment(item.launchDate).format("MMM YYYY")}
-                    </div>
-                    <div className="timeline-content">
-                      <div className="timeline-dot"></div>
+              {/* Central horizontal line */}
+              <div className="timeline-horizontal-line"></div>
+
+              {/* Scrollable container */}
+              <div className="timeline-chart-container">
+                <div className="timeline-chart">
+                  {launchTimelineData.map((item, index) => (
+                    <div key={index} className="timeline-item">
+                      {/* Vertical line */}
                       <div
-                        className="timeline-line"
-                        style={{
-                          display:
-                            index === launchTimelineData.length - 1
-                              ? "none"
-                              : "block",
-                        }}
+                        className={
+                          index % 2 === 0
+                            ? "vertical-line vertical-line-above"
+                            : "vertical-line vertical-line-below"
+                        }
                       ></div>
-                      <div className="timeline-label">{item.chainName}</div>
+
+                      {/* Dot positioned at the end of the vertical line */}
+                      <div
+                        className={
+                          index % 2 === 0
+                            ? "timeline-dot dot-above"
+                            : "timeline-dot dot-below"
+                        }
+                      ></div>
+
+                      {/* Label positioned at the dot */}
+                      <div
+                        className={
+                          index % 2 === 0
+                            ? "timeline-label label-above"
+                            : "timeline-label label-below"
+                        }
+                      >
+                        <div className="chain-name">{item.chainName}</div>
+                        <div className="launch-date">
+                          {moment(item.launchDate).format("MMM YYYY")}
+                        </div>
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             </div>
 

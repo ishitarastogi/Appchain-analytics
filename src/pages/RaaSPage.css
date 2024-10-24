@@ -119,57 +119,100 @@
     flex: 1 1 100%; /* Full width on small screens */
   }
 }
-
 /* Launch Timeline Section */
 .launch-timeline-section {
   margin: 20px 35px;
+  position: relative;
+  width: 90%;
+  margin-top: 90px;
+  margin-left: 80px;
 }
 
+/* Central horizontal line */
+.timeline-horizontal-line {
+  width: 100%;
+  height: 2px;
+  background-color: #ff3b57;
+  position: absolute;
+  top: 95%; /* Center the horizontal line vertically */
+  left: 0;
+}
+
+/* Timeline Chart */
 .timeline-chart {
   display: flex;
-  align-items: center;
-  margin-top: 20px;
-  overflow-x: auto;
+  justify-content: space-between;
+  position: relative;
+  margin-top: 50px;
 }
 
+/* Timeline Item */
 .timeline-item {
+  position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  position: relative;
-  margin-right: 20px;
 }
 
-.timeline-content {
-  display: flex;
-  align-items: center;
-  position: relative;
+/* Vertical line */
+.vertical-line {
+  width: 2px;
+  background-color: #ff3b57;
+  position: absolute;
 }
 
+/* Vertical line above */
+.vertical-line-above {
+  height: 40px; /* Adjust as needed */
+  bottom: 50%; /* Start from the horizontal line */
+}
+
+/* Vertical line below */
+.vertical-line-below {
+  height: 40px; /* Adjust as needed */
+  top: 50%; /* Start from the horizontal line */
+}
+
+/* Dots */
 .timeline-dot {
   width: 12px;
   height: 12px;
   background-color: #ff3b57;
   border-radius: 50%;
-  position: relative;
-  z-index: 1;
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
 }
 
-.timeline-line {
-  width: 50px;
-  height: 2px;
-  background-color: #ff3b57;
-  position: relative;
-  margin-left: 6px;
-  margin-right: 6px;
+/* Dot above */
+.dot-above {
+  bottom: calc(50% + 40px); /* Position at the end of the vertical line */
 }
 
-.timeline-date,
+/* Dot below */
+.dot-below {
+  top: calc(50% + 40px); /* Position at the end of the vertical line */
+}
+
+/* Labels */
 .timeline-label {
-  color: #ffffff;
-  margin-top: 10px;
-  font-size: 0.8rem;
+  position: absolute;
+  width: 100px;
   text-align: center;
+  color: #ffffff;
+  font-size: 0.9rem;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* Label above */
+.label-above {
+  bottom: calc(50% + 55px); /* Position above the dot */
+}
+
+/* Label below */
+.label-below {
+  top: calc(50% + 55px); /* Position below the dot */
 }
 
 .time-range-selector {
@@ -218,7 +261,8 @@
   display: flex;
   flex-wrap: wrap;
   gap: 20px;
-  margin: 20px 35px;
+  margin-left: 35px;
+  margin-top: 200px;
 }
 
 .filter-dropdown {

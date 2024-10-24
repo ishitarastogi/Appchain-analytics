@@ -996,7 +996,7 @@ const DataAvailabilityPage = () => {
 
   const clearCache = async () => {
     try {
-      await clearAllData(DATA_AVAILABILITY_DATA_ID);
+      // await clearAllData(DATA_AVAILABILITY_DATA_ID);
       console.log("✅ Cached data cleared.");
       // Refetch the data
       await fetchData();
