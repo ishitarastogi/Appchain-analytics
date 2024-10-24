@@ -19,7 +19,7 @@ import {
   Filler,
   ArcElement,
 } from "chart.js";
-import { Line, Bar, Pie } from "react-chartjs-2";
+import { Line, Pie } from "react-chartjs-2";
 import {
   fetchGoogleSheetData,
   fetchAllTransaction,
@@ -27,11 +27,18 @@ import {
   fetchAllTpsData,
   fetchAllTvlData,
 } from "../services/googleSheetService";
-import { abbreviateNumber, formatNumber } from "../utils/numberFormatter";
+// import { abbreviateNumber } from "../utils/numberFormatter"; // Correct Import
 import moment from "moment";
 import { saveData, getData, clearAllData } from "../services/indexedDBService";
+import EthereumDALogo from "../assets/logos/da/ethereum.png";
+import DACLogo from "../assets/logos/da/dac.png";
+import EthereumLogo from "../assets/logos/da/ethereum.png";
+import CelestiaLogo from "../assets/logos/da/celestia.png";
+import EigenDA from "../assets/logos/da/EigenDA.jpg";
+import OPStackLogo from "../assets/logos/framework/op.png";
+import OrbitLogo from "../assets/logos/framework/arbitrums.png";
+import PolygonLogo from "../assets/logos/framework/Polygon.jpeg";
 
-// Register required components for Chart.js
 ChartJS.register(
   LineElement,
   BarElement,
@@ -45,6 +52,25 @@ ChartJS.register(
   Filler,
   ArcElement
 );
+// src/utils/numberFormatter.js
+
+const abbreviateNumber = (number, decimals = 2) => {
+  if (number === null || number === undefined || isNaN(number)) return "0";
+
+  const absNumber = Math.abs(number);
+
+  if (absNumber >= 1.0e8) {
+    // For numbers >= 100,000,000 → Million (scaled by 100,000,000)
+    return (number / 1.0e8).toFixed(decimals) + "M";
+  }
+
+  if (absNumber >= 1.0e5) {
+    // For numbers >= 100,000 → Thousand (scaled by 100,000)
+    return (number / 1.0e5).toFixed(decimals) + "K";
+  }
+
+  return number.toLocaleString(); // Formats number with commas
+};
 
 const RAAS_DATA_ID = "raasPageData"; // Unique ID for IndexedDB
 
@@ -73,10 +99,14 @@ const RaaSPage = () => {
   const [selectedFramework, setSelectedFramework] = useState("All Frameworks");
   const [selectedLayer, setSelectedLayer] = useState("All Layers");
 
+  // Chart View Options
+  const [chartView, setChartView] = useState("Total"); // Options: Total, Per Chain
+  const [chartType, setChartType] = useState("Absolute"); // Options: Absolute, Stacked, Percentage
+
   const raasOptions = ["Gelato", "Caldera", "Conduit", "Altlayer", "Alchemy"];
 
   const timeRangeOptions = {
-    Daily: ["Daily", "90 days", "180 days", "1 Year", "All"],
+    Daily: ["90 days", "180 days", "1 Year", "All"],
     Monthly: ["3 Months", "6 Months", "1 Year", "All"],
   };
 
@@ -85,10 +115,9 @@ const RaaSPage = () => {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      // await clearAllData(); // Remove this line if you want to utilize caching
       try {
         // Retrieve data from IndexedDB
-        // Uncomment the next line to clear IndexedDB for testing
-        // await clearAllData();
         console.log("🔍 Attempting to retrieve data from IndexedDB...");
         const storedRecord = await getData(RAAS_DATA_ID);
 
@@ -132,7 +161,6 @@ const RaaSPage = () => {
     };
 
     fetchData();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const populateStateWithData = (data) => {
@@ -144,9 +172,12 @@ const RaaSPage = () => {
       tvlData,
     } = data;
 
-    // Filter chains with status "Mainnet"
+    // Filter chains with status "Mainnet" and have a projectId
     const mainnetChains = sheetData.filter(
-      (chain) => chain.status && chain.status.trim().toLowerCase() === "mainnet"
+      (chain) =>
+        chain.status &&
+        chain.status.trim().toLowerCase() === "mainnet" &&
+        chain.projectId // Ensure projectId is present
     );
 
     setAllChains(mainnetChains);
@@ -243,11 +274,15 @@ const RaaSPage = () => {
     let total = 0;
     filteredChains.forEach((chain) => {
       const chainName = chain.name;
-      const chainTvl = tvlDataByChainDate[chainName] || {};
-      total += Object.values(chainTvl).reduce(
-        (sum, val) => sum + (val.totalTvl || 0),
-        0
-      );
+      const chainTvlData = tvlDataByChainDate[chainName] || {};
+      const dateKeys = Object.keys(chainTvlData);
+      if (dateKeys.length > 0) {
+        const latestDate = dateKeys.reduce((a, b) =>
+          moment(a).isAfter(b) ? a : b
+        );
+        const currentTvl = chainTvlData[latestDate]?.totalTvl || 0;
+        total += currentTvl;
+      }
     });
     return total;
   }, [filteredChains, tvlDataByChainDate]);
@@ -256,15 +291,18 @@ const RaaSPage = () => {
   const averageTPS = useMemo(() => {
     let total = 0;
     let count = 0;
-    const today = moment().format("YYYY-MM-DD");
-    const yesterday = moment().subtract(1, "day").format("YYYY-MM-DD");
     filteredChains.forEach((chain) => {
       const chainName = chain.name;
       const chainTpsData = tpsDataByChainDate[chainName] || {};
-      // Get current TPS
-      const currentTps = chainTpsData[yesterday] || chainTpsData[today] || 0;
-      total += currentTps;
-      count += 1;
+      const dateKeys = Object.keys(chainTpsData);
+      if (dateKeys.length > 0) {
+        const latestDate = dateKeys.reduce((a, b) =>
+          moment(a).isAfter(b) ? a : b
+        );
+        const currentTps = chainTpsData[latestDate] || 0;
+        total += currentTps;
+        count += 1;
+      }
     });
     // Avoid division by zero
     return count > 0 ? total / count : 0;
@@ -277,10 +315,6 @@ const RaaSPage = () => {
     let dateDifference;
 
     switch (timeRange) {
-      case "Daily":
-        // For Daily, use the most recent date
-        startDate = moment().subtract(1, "day").format("YYYY-MM-DD");
-        break;
       case "90 days":
       case "3 Months":
         dateDifference = timeUnit === "Daily" ? 90 : 3 * 30; // Approximate months
@@ -342,135 +376,212 @@ const RaaSPage = () => {
 
   // Table Data
   const tableData = useMemo(() => {
-    const today = moment().format("YYYY-MM-DD");
-    const yesterday = moment().subtract(1, "day").format("YYYY-MM-DD");
-    return filteredChains.map((chain) => {
-      const chainName = chain.name;
-      const chainVertical = chain.vertical || "N/A";
-      const chainFramework = chain.framework || "N/A";
-      const chainDA = chain.da || "N/A";
-      const chainSettlement = chain.settlementWhenL3 || "N/A";
-      const chainLogo = chain.logoUrl || "";
+    return (
+      filteredChains
+        .map((chain) => {
+          const chainName = chain.name;
+          const chainLogo = chain.logoUrl || "";
+          const chainVertical = chain.vertical || "N/A";
+          const chainFramework = chain.framework || "N/A";
+          const chainDA = chain.da || "N/A";
+          const chainSettlement = chain.settlementWhenL3 || "N/A"; // Ensure this property exists
 
-      // TVL
-      const chainTvl = tvlDataByChainDate[chainName] || {};
-      const totalTvl = Object.values(chainTvl).reduce(
-        (sum, val) => sum + (val.totalTvl || 0),
-        0
-      );
+          // TVL
+          const chainTvl = tvlDataByChainDate[chainName] || {};
+          const dateKeys = Object.keys(chainTvl);
+          let currentTvl = 0;
+          if (dateKeys.length > 0) {
+            const latestDate = dateKeys.reduce((a, b) =>
+              moment(a).isAfter(b) ? a : b
+            );
+            currentTvl = chainTvl[latestDate]?.totalTvl || 0;
+          }
 
-      // TPS
-      const chainTpsData = tpsDataByChainDate[chainName] || {};
-      const tpsValues = Object.values(chainTpsData);
-      // Get current TPS and max TPS
-      const currentTps = chainTpsData[yesterday] || chainTpsData[today] || 0;
-      const maxTps = tpsValues.length > 0 ? Math.max(...tpsValues) : 0;
+          // Total Transactions
+          const chainTransactions = transactionsByChainDate[chainName] || {};
+          const totalTransactions = Object.values(chainTransactions).reduce(
+            (sum, val) => sum + (val.value || 0),
+            0
+          );
 
-      // Transaction Count
-      const chainTransactions = transactionsByChainDate[chainName] || {};
-      const totalTransactions = Object.values(chainTransactions).reduce(
-        (sum, val) => sum + (val.value || 0),
-        0
-      );
+          // Total Active Accounts
+          const chainAccounts = activeAccountsByChainDate[chainName] || {};
+          const totalActiveAccounts = Object.values(chainAccounts).reduce(
+            (sum, val) => sum + (val || 0),
+            0
+          );
 
-      // Active Accounts
-      const chainAccounts = activeAccountsByChainDate[chainName] || {};
-      const totalActiveAccounts = Object.values(chainAccounts).reduce(
-        (sum, val) => sum + (val || 0),
-        0
-      );
+          // Current TPS
+          const chainTpsData = tpsDataByChainDate[chainName] || {};
+          const tpsDateKeys = Object.keys(chainTpsData);
+          let currentTps = 0;
+          if (tpsDateKeys.length > 0) {
+            const latestTpsDate = tpsDateKeys.reduce((a, b) =>
+              moment(a).isAfter(b) ? a : b
+            );
+            currentTps = chainTpsData[latestTpsDate] || 0;
+          }
 
-      return {
-        chainName,
-        chainLogo,
-        chainVertical,
-        chainFramework,
-        chainDA,
-        chainSettlement,
-        totalTvl,
-        currentTps, // Updated field
-        maxTps, // Updated field
-        totalTransactions,
-        totalActiveAccounts,
-      };
-    });
+          return {
+            chainName,
+            chainLogo,
+            chainVertical,
+            chainFramework,
+            chainDA,
+            chainSettlement,
+            currentTvl,
+            totalTransactions,
+            totalActiveAccounts,
+            currentTps, // Added Current TPS
+          };
+        })
+        //.filter((chain) => chain !== null) // Remove null entries (now unnecessary)
+        .sort((a, b) => b.currentTvl - a.currentTvl) // Sort by TVL descending
+      //.slice(0, 10) // Remove this line to include all chains
+    );
   }, [
     filteredChains,
+    tvlDataByChainDate,
     transactionsByChainDate,
     activeAccountsByChainDate,
-    tpsDataByChainDate,
-    tvlDataByChainDate,
+    tpsDataByChainDate, // Added dependency
   ]);
 
   // Activity Charts Data
   const activityChartData = useMemo(() => {
     const dates = getFilteredDates();
 
-    const transactionCounts = dates.map((date) => {
-      let total = 0;
-      filteredChains.forEach((chain) => {
-        const chainName = chain.name;
-        const chainTransactions = transactionsByChainDate[chainName] || {};
-        const value = chainTransactions[date]?.value || 0;
-        total += value;
-      });
-      return total;
-    });
+    // Initialize datasets
+    const transactionDatasets = [];
+    const activeAccountsDatasets = [];
+    const tvlDatasets = [];
 
-    const activeAccountsCounts = dates.map((date) => {
-      let total = 0;
-      filteredChains.forEach((chain) => {
-        const chainName = chain.name;
-        const chainAccounts = activeAccountsByChainDate[chainName] || {};
-        const value = chainAccounts[date] || 0;
-        total += value;
+    if (chartView === "Total") {
+      // Total data
+      const transactionCounts = dates.map((date) => {
+        let total = 0;
+        filteredChains.forEach((chain) => {
+          const chainName = chain.name;
+          const chainTransactions = transactionsByChainDate[chainName] || {};
+          total += chainTransactions[date]?.value || 0;
+        });
+        return total;
       });
-      return total;
-    });
 
-    const tvlValues = dates.map((date) => {
-      let total = 0;
-      filteredChains.forEach((chain) => {
-        const chainName = chain.name;
-        const chainTvl = tvlDataByChainDate[chainName] || {};
-        const value = chainTvl[date]?.totalTvl || 0;
-        total += value;
+      const activeAccountsCounts = dates.map((date) => {
+        let total = 0;
+        filteredChains.forEach((chain) => {
+          const chainName = chain.name;
+          const chainAccounts = activeAccountsByChainDate[chainName] || {};
+          total += chainAccounts[date] || 0;
+        });
+        return total;
       });
-      return total;
-    });
 
-    const tpsValues = dates.map((date) => {
-      let total = 0;
-      let count = 0;
-      filteredChains.forEach((chain) => {
-        const chainName = chain.name;
-        const chainTps = tpsDataByChainDate[chainName] || {};
-        if (chainTps[date] !== undefined) {
-          total += chainTps[date];
-          count += 1;
-        }
+      const tvlValues = dates.map((date) => {
+        let total = 0;
+        filteredChains.forEach((chain) => {
+          const chainName = chain.name;
+          const chainTvl = tvlDataByChainDate[chainName] || {};
+          total += chainTvl[date]?.totalTvl || 0;
+        });
+        return total;
       });
-      return count > 0 ? total / count : 0;
-    });
+
+      transactionDatasets.push({
+        label: "Total Transactions",
+        data: transactionCounts,
+        borderColor: "#FF6384",
+        backgroundColor: "rgba(255,99,132,0.2)",
+        fill: true,
+        tension: 0.1,
+      });
+
+      activeAccountsDatasets.push({
+        label: "Total Active Accounts",
+        data: activeAccountsCounts,
+        borderColor: "#36A2EB",
+        backgroundColor: "rgba(54,162,235,0.2)",
+        fill: true,
+        tension: 0.1,
+      });
+
+      tvlDatasets.push({
+        label: "Total TVL",
+        data: tvlValues,
+        borderColor: "#FFCE56",
+        backgroundColor: "rgba(255,206,86,0.2)",
+        fill: true,
+        tension: 0.1,
+      });
+    } else {
+      // Per-chain data
+      filteredChains.forEach((chain, index) => {
+        const chainName = chain.name;
+        const color = `hsl(${(index * 50) % 360}, 70%, 50%)`;
+
+        // Transactions
+        const transactionData = dates.map((date) => {
+          const chainTransactions = transactionsByChainDate[chainName] || {};
+          return chainTransactions[date]?.value || 0;
+        });
+        transactionDatasets.push({
+          label: chainName,
+          data: transactionData,
+          borderColor: color,
+          backgroundColor: color,
+          fill: false,
+          tension: 0.1,
+        });
+
+        // Active Accounts
+        const activeAccountsData = dates.map((date) => {
+          const chainAccounts = activeAccountsByChainDate[chainName] || {};
+          return chainAccounts[date] || 0;
+        });
+        activeAccountsDatasets.push({
+          label: chainName,
+          data: activeAccountsData,
+          borderColor: color,
+          backgroundColor: color,
+          fill: false,
+          tension: 0.1,
+        });
+
+        // TVL
+        const tvlData = dates.map((date) => {
+          const chainTvl = tvlDataByChainDate[chainName] || {};
+          return chainTvl[date]?.totalTvl || 0;
+        });
+        tvlDatasets.push({
+          label: chainName,
+          data: tvlData,
+          borderColor: color,
+          backgroundColor: color,
+          fill: false,
+          tension: 0.1,
+        });
+      });
+    }
 
     return {
       dates,
-      transactionCounts,
-      activeAccountsCounts,
-      tvlValues,
-      tpsValues,
+      transactionDatasets,
+      activeAccountsDatasets,
+      tvlDatasets,
     };
   }, [
     filteredChains,
     transactionsByChainDate,
     activeAccountsByChainDate,
-    tpsDataByChainDate,
     tvlDataByChainDate,
+    chartView,
+    chartType,
     timeRange,
     timeUnit,
   ]);
 
-  // Ecosystem Charts Data
+  // Ecosystem Charts Data (remains the same)
   const ecosystemChartData = useMemo(() => {
     // Chain by Vertical
     const verticalCounts = {};
@@ -541,6 +652,16 @@ const RaaSPage = () => {
     setTimeRange(range);
   };
 
+  // Handle Chart View Change
+  const handleChartViewChange = (event) => {
+    setChartView(event.target.value);
+  };
+
+  // Handle Chart Type Change
+  const handleChartTypeChange = (event) => {
+    setChartType(event.target.value);
+  };
+
   // Placeholder for chain logos
   const chainLogoMap = {
     // Replace with actual logo URLs
@@ -550,6 +671,36 @@ const RaaSPage = () => {
     "Data Availability A": "/logos/da_a.png",
     "Data Availability B": "/logos/da_b.png",
     // Add other mappings as needed
+  };
+
+  // Utility functions
+  const getColorForChain = (chainName) => {
+    const colorMap = {
+      Playnance: "#FF6384",
+      Anomaly: "#36A2EB",
+      "Aleph Zero": "#FFCE56",
+      Everclear: "#4BC0C0",
+      Fox: "#9966FF",
+      Ethernity: "#FF9F40",
+      Camp: "#C9CBCF",
+      Gameswift: "#E7E9ED",
+      "SX Network": "#36A2EB",
+      "Event Horizon": "#FF6384",
+      Arenaz: "#FFCE56",
+      "Edu Chain": "#4BC0C0",
+      Caldera: "#EC6731",
+      Other: "#999999",
+    };
+    return colorMap[chainName] || getRandomColor();
+  };
+
+  const getRandomColor = () => {
+    const letters = "0123456789ABCDEF";
+    let color = "#";
+    for (let i = 0; i < 6; i++) {
+      color += letters[Math.floor(Math.random() * 16)];
+    }
+    return color;
   };
 
   return (
@@ -600,6 +751,7 @@ const RaaSPage = () => {
             </div>
 
             {/* Statistics Cards */}
+            {/* Statistics Cards */}
             <div className="stats-cards">
               <div className="stats-card">
                 <h3>Total Projects</h3>
@@ -607,15 +759,18 @@ const RaaSPage = () => {
               </div>
               <div className="stats-card">
                 <h3>Total Transactions</h3>
-                <p>{abbreviateNumber(totalTransactions, 2)}</p>
+                <p>${abbreviateNumber(totalTransactions, 2)}</p>{" "}
+                {/* 'M' is appended by the function */}
               </div>
               <div className="stats-card">
                 <h3>Total Active Accounts</h3>
-                <p>{abbreviateNumber(totalActiveAccounts, 2)}</p>
+                <p>${abbreviateNumber(totalActiveAccounts, 2)}</p>{" "}
+                {/* 'M' is appended by the function */}
               </div>
               <div className="stats-card">
                 <h3>Total TVL</h3>
-                <p>${abbreviateNumber(totalTVL, 2)}M</p>
+                <p>${abbreviateNumber(totalTVL, 2)}</p>{" "}
+                {/* Removed extra 'M' */}
               </div>
               <div className="stats-card">
                 <h3>Average TPS</h3>
@@ -721,7 +876,6 @@ const RaaSPage = () => {
               </div>
             </div>
 
-            {/* Data Table */}
             <div className="table-section">
               <h3 className="section-title">Projects</h3>
               <div className="table-container">
@@ -731,12 +885,12 @@ const RaaSPage = () => {
                       <th>Name</th>
                       <th>Vertical</th>
                       <th>TVL</th>
-                      <th>Current TPS</th>
-                      <th>Max TPS</th>
                       <th>Tx Count</th>
                       <th>Active Accounts</th>
+                      <th>Current TPS</th>
                     </tr>
                   </thead>
+
                   <tbody>
                     {tableData.map((chain, index) => (
                       <tr key={index}>
@@ -784,21 +938,17 @@ const RaaSPage = () => {
                           </div>
                         </td>
                         <td>{chain.chainVertical}</td>
-                        <td>${abbreviateNumber(chain.totalTvl, 2)}M</td>
+                        <td>${abbreviateNumber(chain.currentTvl, 2)}</td>{" "}
+                        {/* Removed 'M' */}
                         <td>
-                          {chain.currentTps !== undefined
-                            ? chain.currentTps.toFixed(2)
-                            : "N/A"}
-                        </td>
+                          ${abbreviateNumber(chain.totalTransactions, 2)}
+                        </td>{" "}
+                        {/* Added '$' if desired */}
                         <td>
-                          {chain.maxTps !== undefined
-                            ? chain.maxTps.toFixed(2)
-                            : "N/A"}
-                        </td>
-                        <td>{abbreviateNumber(chain.totalTransactions, 2)}</td>
-                        <td>
-                          {abbreviateNumber(chain.totalActiveAccounts, 2)}
-                        </td>
+                          ${abbreviateNumber(chain.totalActiveAccounts, 2)}
+                        </td>{" "}
+                        {/* Added '$' if desired */}
+                        <td>{chain.currentTps.toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -806,41 +956,51 @@ const RaaSPage = () => {
               </div>
             </div>
 
-            {/* Activity Charts */}
-            <div className="activity-charts-section">
-              <div className="x-axis-selector">
-                <label>X-Axis:</label>
-                <select value={xAxisOption} onChange={handleXAxisOptionChange}>
-                  {xAxisOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
+            {/* Chart View Options */}
+            <div className="chart-options">
+              <div className="chart-view-dropdown">
+                <label>Chart View:</label>
+                <select value={chartView} onChange={handleChartViewChange}>
+                  <option value="Total">Total</option>
+                  <option value="Per Chain">Per Chain</option>
                 </select>
               </div>
+              <div className="chart-type-dropdown">
+                <label>Chart Type:</label>
+                <select value={chartType} onChange={handleChartTypeChange}>
+                  <option value="Absolute">Absolute</option>
+                  <option value="Stacked">Stacked</option>
+                  <option value="Percentage">Percentage</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Activity Charts */}
+            <div className="activity-charts-section">
+              <h2>Activity charts</h2>
+
               <div className="charts-grid">
+                {/* Transaction Count Chart */}
                 <div className="chart-card">
                   <h4>Transaction Count</h4>
-                  <Bar
+                  <Line
                     data={{
                       labels: activityChartData.dates.map((date) =>
                         timeUnit === "Daily"
                           ? moment(date).format("D MMM")
                           : moment(date).format("MMM YYYY")
                       ),
-                      datasets: [
-                        {
-                          label: "Transactions",
-                          data: activityChartData.transactionCounts,
-                          backgroundColor: "#FF6384",
-                        },
-                      ],
+                      datasets: activityChartData.transactionDatasets,
                     }}
                     options={{
                       responsive: true,
                       plugins: {
                         legend: {
-                          display: false,
+                          display: chartView === "Per Chain",
+                          position: "bottom",
+                          labels: {
+                            color: "#FFFFFF",
+                          },
                         },
                       },
                       scales: {
@@ -866,26 +1026,24 @@ const RaaSPage = () => {
                 {/* Active Accounts Chart */}
                 <div className="chart-card">
                   <h4>Active Accounts</h4>
-                  <Bar
+                  <Line
                     data={{
                       labels: activityChartData.dates.map((date) =>
                         timeUnit === "Daily"
                           ? moment(date).format("D MMM")
                           : moment(date).format("MMM YYYY")
                       ),
-                      datasets: [
-                        {
-                          label: "Active Accounts",
-                          data: activityChartData.activeAccountsCounts,
-                          backgroundColor: "#36A2EB",
-                        },
-                      ],
+                      datasets: activityChartData.activeAccountsDatasets,
                     }}
                     options={{
                       responsive: true,
                       plugins: {
                         legend: {
-                          display: false,
+                          display: chartView === "Per Chain",
+                          position: "bottom",
+                          labels: {
+                            color: "#FFFFFF",
+                          },
                         },
                       },
                       scales: {
@@ -918,22 +1076,17 @@ const RaaSPage = () => {
                           ? moment(date).format("D MMM")
                           : moment(date).format("MMM YYYY")
                       ),
-                      datasets: [
-                        {
-                          label: "TVL",
-                          data: activityChartData.tvlValues,
-                          borderColor: "#FFCE56",
-                          backgroundColor: "rgba(255, 206, 86, 0.2)",
-                          tension: 0.1,
-                          fill: true,
-                        },
-                      ],
+                      datasets: activityChartData.tvlDatasets,
                     }}
                     options={{
                       responsive: true,
                       plugins: {
                         legend: {
-                          display: false,
+                          display: chartView === "Per Chain",
+                          position: "bottom",
+                          labels: {
+                            color: "#FFFFFF",
+                          },
                         },
                       },
                       scales: {
@@ -956,6 +1109,7 @@ const RaaSPage = () => {
                     }}
                   />
                 </div>
+                {/* Average TPS Chart */}
                 <div className="chart-card">
                   <h4>Average TPS</h4>
                   <Line
@@ -968,7 +1122,20 @@ const RaaSPage = () => {
                       datasets: [
                         {
                           label: "Average TPS",
-                          data: activityChartData.tpsValues,
+                          data: activityChartData.dates.map((date) => {
+                            let total = 0;
+                            let count = 0;
+                            filteredChains.forEach((chain) => {
+                              const chainName = chain.name;
+                              const chainTps =
+                                tpsDataByChainDate[chainName] || {};
+                              if (chainTps[date] !== undefined) {
+                                total += chainTps[date];
+                                count += 1;
+                              }
+                            });
+                            return count > 0 ? total / count : 0;
+                          }),
                           borderColor: "#4BC0C0",
                           backgroundColor: "rgba(75, 192, 192, 0.2)",
                           tension: 0.1,
@@ -1048,6 +1215,7 @@ const RaaSPage = () => {
 
             {/* Ecosystem Charts */}
             <div className="ecosystem-charts-section">
+              <h2>Ecosystem charts</h2>
               <div className="charts-grid">
                 {/* Chain by Vertical */}
                 <div className="chart-card">

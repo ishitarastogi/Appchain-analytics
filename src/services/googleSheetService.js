@@ -421,6 +421,7 @@ export const fetchAllTransactions = async (sheetData) => {
 };
 
 // Fetch TVL Data for a single chain using l2beat API
+// Corrected fetchTvlData function
 export const fetchTvlData = async (projectId) => {
   const inputParam = encodeURIComponent(
     JSON.stringify({
@@ -470,9 +471,9 @@ export const fetchTvlData = async (projectId) => {
     // Data is an array of arrays: [[timestamp, native, canonical, external, ...], ...]
     const tvlData = data.map((entry) => {
       const timestamp = entry[0]; // First element is the timestamp
-      const nativeTvl = entry[1] / 1e8; // Second element divided by 100,000,000
-      const canonical = entry[2] / 1e8; // Third element divided by 100,000,000
-      const external = entry[3] / 1e8; // Fourth element divided by 100,000,000
+      const nativeTvl = entry[1]; // Already in USD
+      const canonical = entry[2]; // Already in USD
+      const external = entry[3]; // Already in USD
       const totalTvl = nativeTvl + canonical + external;
       const date = moment.unix(timestamp).format("YYYY-MM-DD");
       return {
