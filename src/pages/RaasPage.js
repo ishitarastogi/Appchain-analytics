@@ -27,17 +27,20 @@ import {
   fetchAllTpsData,
   fetchAllTvlData,
 } from "../services/googleSheetService";
-// import { abbreviateNumber } from "../utils/numberFormatter"; // Correct Import
 import moment from "moment";
 import { saveData, getData, clearAllData } from "../services/indexedDBService";
+
+// DA Logos
 import EthereumDALogo from "../assets/logos/da/ethereum.png";
 import DACLogo from "../assets/logos/da/dac.png";
-import EthereumLogo from "../assets/logos/da/ethereum.png";
 import CelestiaLogo from "../assets/logos/da/celestia.png";
-import EigenDA from "../assets/logos/da/EigenDA.jpg";
+import EigenDALogo from "../assets/logos/da/EigenDA.jpg"; // Renamed for clarity
+
+// Framework Logos
 import OPStackLogo from "../assets/logos/framework/op.png";
 import OrbitLogo from "../assets/logos/framework/arbitrums.png";
 import PolygonLogo from "../assets/logos/framework/Polygon.jpeg";
+import Nova from "../assets/logos/framework/Nova.png";
 
 ChartJS.register(
   LineElement,
@@ -52,8 +55,8 @@ ChartJS.register(
   Filler,
   ArcElement
 );
-// src/utils/numberFormatter.js
 
+// Custom Number Formatter
 const abbreviateNumber = (number, decimals = 2) => {
   if (number === null || number === undefined || isNaN(number)) return "0";
 
@@ -71,6 +74,39 @@ const abbreviateNumber = (number, decimals = 2) => {
 
   return number.toLocaleString(); // Formats number with commas
 };
+
+// DA Logos Mapping
+const daLogoMap = {
+  EthereumDA: EthereumDALogo,
+  DAC: DACLogo,
+  Celestia: CelestiaLogo,
+  "Eigen DA": EigenDALogo,
+
+  // Add other DA mappings as needed
+};
+
+// Framework Logos Mapping
+const frameworkLogoMap = {
+  "OP Stack": OPStackLogo,
+  Orbit: OrbitLogo,
+  Polygon: PolygonLogo,
+  "Arbitrum Nova": Nova,
+  // Add other Framework mappings as needed
+};
+
+// Settlement Logos Mapping
+const settlementLogoMap = {
+  // Example mappings; replace with actual logos and keys
+  Ethereum: EthereumDALogo,
+  "Arbitrum Nova": Nova,
+};
+
+// Utility functions to get logos
+const getDALogo = (daName) => daLogoMap[daName] || "/logos/default_da.png";
+const getFrameworkLogo = (frameworkName) =>
+  frameworkLogoMap[frameworkName] || "/logos/default_framework.png";
+const getSettlementLogo = (settlementName) =>
+  settlementLogoMap[settlementName] || "/logos/default_settlement.png";
 
 const RAAS_DATA_ID = "raasPageData"; // Unique ID for IndexedDB
 
@@ -662,17 +698,6 @@ const RaaSPage = () => {
     setChartType(event.target.value);
   };
 
-  // Placeholder for chain logos
-  const chainLogoMap = {
-    // Replace with actual logo URLs
-    "Optimism SDK": "/logos/optimism_sdk.png",
-    "OP Stack": "/logos/op_stack.png",
-    "ZK Rollup": "/logos/zk_rollup.png",
-    "Data Availability A": "/logos/da_a.png",
-    "Data Availability B": "/logos/da_b.png",
-    // Add other mappings as needed
-  };
-
   // Utility functions
   const getColorForChain = (chainName) => {
     const colorMap = {
@@ -742,15 +767,31 @@ const RaaSPage = () => {
 
         {!loading && (
           <>
-            {/* Description */}
-            <div className="raas-description">
-              <p>
-                {selectedRaas} is a leading Rollup as a Service provider,
-                offering scalable solutions for blockchain projects.
-              </p>
+            <div className="time-range-selector">
+              <div className="time-range-left">
+                {["Daily", "Monthly"].map((unit) => (
+                  <button
+                    key={unit}
+                    className={timeUnit === unit ? "active" : ""}
+                    onClick={() => handleTimeUnitChange(unit)}
+                  >
+                    {unit}
+                  </button>
+                ))}
+              </div>
+              <div className="time-range-right">
+                {timeRangeOptions[timeUnit].map((range) => (
+                  <button
+                    key={range}
+                    className={timeRange === range ? "active" : ""}
+                    onClick={() => handleTimeRangeChange(range)}
+                  >
+                    {range}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {/* Statistics Cards */}
             {/* Statistics Cards */}
             <div className="stats-cards">
               <div className="stats-card">
@@ -759,18 +800,15 @@ const RaaSPage = () => {
               </div>
               <div className="stats-card">
                 <h3>Total Transactions</h3>
-                <p>${abbreviateNumber(totalTransactions, 2)}</p>{" "}
-                {/* 'M' is appended by the function */}
+                <p>${abbreviateNumber(totalTransactions, 2)}</p>
               </div>
               <div className="stats-card">
                 <h3>Total Active Accounts</h3>
-                <p>${abbreviateNumber(totalActiveAccounts, 2)}</p>{" "}
-                {/* 'M' is appended by the function */}
+                <p>${abbreviateNumber(totalActiveAccounts, 2)}</p>
               </div>
               <div className="stats-card">
                 <h3>Total TVL</h3>
-                <p>${abbreviateNumber(totalTVL, 2)}</p>{" "}
-                {/* Removed extra 'M' */}
+                <p>${abbreviateNumber(totalTVL, 2)}</p>
               </div>
               <div className="stats-card">
                 <h3>Average TPS</h3>
@@ -806,32 +844,6 @@ const RaaSPage = () => {
             </div>
 
             {/* Time Range Selector */}
-            <div className="time-range-selector">
-              {/* Left Side: Time Unit Buttons */}
-              <div className="time-range-left">
-                {["Daily", "Monthly"].map((unit) => (
-                  <button
-                    key={unit}
-                    className={timeUnit === unit ? "active" : ""}
-                    onClick={() => handleTimeUnitChange(unit)}
-                  >
-                    {unit}
-                  </button>
-                ))}
-              </div>
-              {/* Right Side: Time Range Buttons */}
-              <div className="time-range-right">
-                {timeRangeOptions[timeUnit].map((range) => (
-                  <button
-                    key={range}
-                    className={timeRange === range ? "active" : ""}
-                    onClick={() => handleTimeRangeChange(range)}
-                  >
-                    {range}
-                  </button>
-                ))}
-              </div>
-            </div>
 
             {/* Filters */}
             <div className="filters-container">
@@ -876,6 +888,7 @@ const RaaSPage = () => {
               </div>
             </div>
 
+            {/* Data Table */}
             <div className="table-section">
               <h3 className="section-title">Projects</h3>
               <div className="table-container">
@@ -901,10 +914,7 @@ const RaaSPage = () => {
                               {/* Framework Logo */}
                               {chain.chainFramework && (
                                 <img
-                                  src={
-                                    chainLogoMap[chain.chainFramework] ||
-                                    "/logos/default_framework.png"
-                                  }
+                                  src={getFrameworkLogo(chain.chainFramework)}
                                   alt={chain.chainFramework}
                                   className="small-logo"
                                   title={chain.chainFramework}
@@ -913,10 +923,7 @@ const RaaSPage = () => {
                               {/* DA Logo */}
                               {chain.chainDA && (
                                 <img
-                                  src={
-                                    chainLogoMap[chain.chainDA] ||
-                                    "/logos/default_da.png"
-                                  }
+                                  src={getDALogo(chain.chainDA)}
                                   alt={chain.chainDA}
                                   className="small-logo"
                                   title={chain.chainDA}
@@ -925,10 +932,7 @@ const RaaSPage = () => {
                               {/* Settlement Logo */}
                               {chain.chainSettlement && (
                                 <img
-                                  src={
-                                    chainLogoMap[chain.chainSettlement] ||
-                                    "/logos/default_settlement.png"
-                                  }
+                                  src={getSettlementLogo(chain.chainSettlement)}
                                   alt={chain.chainSettlement}
                                   className="small-logo"
                                   title={chain.chainSettlement}
@@ -938,16 +942,11 @@ const RaaSPage = () => {
                           </div>
                         </td>
                         <td>{chain.chainVertical}</td>
-                        <td>${abbreviateNumber(chain.currentTvl, 2)}</td>{" "}
-                        {/* Removed 'M' */}
-                        <td>
-                          ${abbreviateNumber(chain.totalTransactions, 2)}
-                        </td>{" "}
-                        {/* Added '$' if desired */}
+                        <td>${abbreviateNumber(chain.currentTvl, 2)}</td>
+                        <td>${abbreviateNumber(chain.totalTransactions, 2)}</td>
                         <td>
                           ${abbreviateNumber(chain.totalActiveAccounts, 2)}
-                        </td>{" "}
-                        {/* Added '$' if desired */}
+                        </td>
                         <td>{chain.currentTps.toFixed(2)}</td>
                       </tr>
                     ))}
