@@ -161,30 +161,42 @@
 /* Time Range Selector */
 .time-range-selector {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between; /* Separate the groups */
   margin: 20px 35px;
+  position: sticky;
+  top: 0; /* Stick to the top */
+  background-color: #000; /* Match the background */
+  padding: 10px 0;
+  z-index: 1000; /* Ensure it stays above other elements */
+}
+
+.time-range-left,
+.time-range-right {
+  display: flex;
   gap: 10px;
 }
 
-.time-range-selector button {
+.time-range-left button,
+.time-range-right button {
   background: transparent;
   color: #ffffff;
   border: 1px solid #ffffff;
   padding: 8px 12px;
   cursor: pointer;
   transition: background-color 0.3s, color 0.3s;
-  border-radius: 8px;
+  border-radius: 8px; /* Rounded corners */
 }
 
-.time-range-selector button.active {
+.time-range-left button.active,
+.time-range-right button.active {
   background-color: #ff3b57;
   border: none;
 }
 
-.time-range-selector button:hover {
+.time-range-left button:hover,
+.time-range-right button:hover {
   background-color: #333;
 }
-
 /* Table Section */
 .table-section {
   margin: 20px 35px;

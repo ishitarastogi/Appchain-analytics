@@ -61,12 +61,24 @@ const RaaSPage = () => {
   const [tvlDataByChainDate, setTvlDataByChainDate] = useState({});
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // New State Variables for Time Range Selector
+  const [timeUnit, setTimeUnit] = useState("Daily"); // "Daily" or "Monthly"
   const [timeRange, setTimeRange] = useState("90 days");
+
   const [xAxisOption, setXAxisOption] = useState("Chain"); // Options: Chain, Vertical, Framework, L2/L3
+
+  // New State Variables for Filters
+  const [selectedVertical, setSelectedVertical] = useState("All Verticals");
+  const [selectedFramework, setSelectedFramework] = useState("All Frameworks");
+  const [selectedLayer, setSelectedLayer] = useState("All Layers");
 
   const raasOptions = ["Gelato", "Caldera", "Conduit", "Altlayer", "Alchemy"];
 
-  const timeRangeOptions = ["90 days", "180 days", "1 Year", "All"];
+  const timeRangeOptions = {
+    Daily: ["Daily", "90 days", "180 days", "1 Year", "All"],
+    Monthly: ["3 Months", "6 Months", "1 Year", "All"],
+  };
 
   const xAxisOptions = ["Chain", "Vertical", "Framework", "L2/L3"];
 
@@ -76,7 +88,7 @@ const RaaSPage = () => {
       try {
         // Retrieve data from IndexedDB
         // Uncomment the next line to clear IndexedDB for testing
-        await clearAllData();
+        // await clearAllData();
         console.log("🔍 Attempting to retrieve data from IndexedDB...");
         const storedRecord = await getData(RAAS_DATA_ID);
 
@@ -144,14 +156,59 @@ const RaaSPage = () => {
     setTvlDataByChainDate(tvlData.tvlDataByChainDate);
   };
 
+  // Compute options for filters
+  const verticalOptions = useMemo(() => {
+    const options = new Set();
+    allChains.forEach((chain) => {
+      if (chain.vertical) options.add(chain.vertical);
+    });
+    return ["All Verticals", ...Array.from(options)];
+  }, [allChains]);
+
+  const frameworkOptions = useMemo(() => {
+    const options = new Set();
+    allChains.forEach((chain) => {
+      if (chain.framework) options.add(chain.framework);
+    });
+    return ["All Frameworks", ...Array.from(options)];
+  }, [allChains]);
+
+  const layerOptions = useMemo(() => {
+    const options = new Set();
+    allChains.forEach((chain) => {
+      if (chain.l2OrL3) options.add(chain.l2OrL3);
+    });
+    return ["All Layers", ...Array.from(options)];
+  }, [allChains]);
+
   useEffect(() => {
-    // Filter chains based on selected RaaS
-    const filtered = allChains.filter(
-      (chain) =>
-        chain.raas && chain.raas.toLowerCase() === selectedRaas.toLowerCase()
-    );
+    // Filter chains based on selected RaaS and other filters
+    const filtered = allChains.filter((chain) => {
+      const matchesRaas =
+        chain.raas && chain.raas.toLowerCase() === selectedRaas.toLowerCase();
+
+      const matchesVertical =
+        selectedVertical === "All Verticals" ||
+        chain.vertical === selectedVertical;
+
+      const matchesFramework =
+        selectedFramework === "All Frameworks" ||
+        chain.framework === selectedFramework;
+
+      const matchesLayer =
+        selectedLayer === "All Layers" || chain.l2OrL3 === selectedLayer;
+
+      return matchesRaas && matchesVertical && matchesFramework && matchesLayer;
+    });
+
     setFilteredChains(filtered);
-  }, [allChains, selectedRaas]);
+  }, [
+    allChains,
+    selectedRaas,
+    selectedVertical,
+    selectedFramework,
+    selectedLayer,
+  ]);
 
   // Compute statistics
   const totalProjects = filteredChains.length;
@@ -195,33 +252,42 @@ const RaaSPage = () => {
     return total;
   }, [filteredChains, tvlDataByChainDate]);
 
+  // Adjusted Average TPS Calculation
   const averageTPS = useMemo(() => {
     let total = 0;
     let count = 0;
+    const today = moment().format("YYYY-MM-DD");
+    const yesterday = moment().subtract(1, "day").format("YYYY-MM-DD");
     filteredChains.forEach((chain) => {
       const chainName = chain.name;
-      const chainTps = tpsDataByChainDate[chainName] || {};
-      const tpsValues = Object.values(chainTps).map(
-        (entry) => entry.value || 0
-      );
-      total += tpsValues.reduce((sum, val) => sum + val, 0);
-      count += tpsValues.length;
+      const chainTpsData = tpsDataByChainDate[chainName] || {};
+      // Get current TPS
+      const currentTps = chainTpsData[yesterday] || chainTpsData[today] || 0;
+      total += currentTps;
+      count += 1;
     });
+    // Avoid division by zero
     return count > 0 ? total / count : 0;
   }, [filteredChains, tpsDataByChainDate]);
 
-  // Time Range Filtering
+  // Time Range Filtering based on timeUnit and timeRange
   const getFilteredDates = () => {
     const today = moment().format("YYYY-MM-DD");
     let startDate;
     let dateDifference;
 
     switch (timeRange) {
+      case "Daily":
+        // For Daily, use the most recent date
+        startDate = moment().subtract(1, "day").format("YYYY-MM-DD");
+        break;
       case "90 days":
-        dateDifference = 90;
+      case "3 Months":
+        dateDifference = timeUnit === "Daily" ? 90 : 3 * 30; // Approximate months
         break;
       case "180 days":
-        dateDifference = 180;
+      case "6 Months":
+        dateDifference = timeUnit === "Daily" ? 180 : 6 * 30;
         break;
       case "1 Year":
         dateDifference = 365;
@@ -276,6 +342,8 @@ const RaaSPage = () => {
 
   // Table Data
   const tableData = useMemo(() => {
+    const today = moment().format("YYYY-MM-DD");
+    const yesterday = moment().subtract(1, "day").format("YYYY-MM-DD");
     return filteredChains.map((chain) => {
       const chainName = chain.name;
       const chainVertical = chain.vertical || "N/A";
@@ -292,14 +360,11 @@ const RaaSPage = () => {
       );
 
       // TPS
-      const chainTps = tpsDataByChainDate[chainName] || {};
-      const tpsValues = Object.values(chainTps).map(
-        (entry) => entry.value || 0
-      );
-      const averageChainTps =
-        tpsValues.length > 0
-          ? tpsValues.reduce((sum, val) => sum + val, 0) / tpsValues.length
-          : 0;
+      const chainTpsData = tpsDataByChainDate[chainName] || {};
+      const tpsValues = Object.values(chainTpsData);
+      // Get current TPS and max TPS
+      const currentTps = chainTpsData[yesterday] || chainTpsData[today] || 0;
+      const maxTps = tpsValues.length > 0 ? Math.max(...tpsValues) : 0;
 
       // Transaction Count
       const chainTransactions = transactionsByChainDate[chainName] || {};
@@ -323,7 +388,8 @@ const RaaSPage = () => {
         chainDA,
         chainSettlement,
         totalTvl,
-        averageChainTps,
+        currentTps, // Updated field
+        maxTps, // Updated field
         totalTransactions,
         totalActiveAccounts,
       };
@@ -379,9 +445,10 @@ const RaaSPage = () => {
       filteredChains.forEach((chain) => {
         const chainName = chain.name;
         const chainTps = tpsDataByChainDate[chainName] || {};
-        const value = chainTps[date]?.value || 0;
-        total += value;
-        if (value > 0) count += 1;
+        if (chainTps[date] !== undefined) {
+          total += chainTps[date];
+          count += 1;
+        }
       });
       return count > 0 ? total / count : 0;
     });
@@ -400,49 +467,73 @@ const RaaSPage = () => {
     tpsDataByChainDate,
     tvlDataByChainDate,
     timeRange,
+    timeUnit,
   ]);
 
   // Ecosystem Charts Data
   const ecosystemChartData = useMemo(() => {
     // Chain by Vertical
     const verticalCounts = {};
+    const verticalChains = {};
     filteredChains.forEach((chain) => {
       const vertical = chain.vertical || "N/A";
       verticalCounts[vertical] = (verticalCounts[vertical] || 0) + 1;
+      if (!verticalChains[vertical]) verticalChains[vertical] = [];
+      verticalChains[vertical].push(chain.name);
     });
 
     // Chain by DA
     const daCounts = {};
+    const daChains = {};
     filteredChains.forEach((chain) => {
       const da = chain.da || "N/A";
       daCounts[da] = (daCounts[da] || 0) + 1;
+      if (!daChains[da]) daChains[da] = [];
+      daChains[da].push(chain.name);
     });
 
     // Chain by Framework
     const frameworkCounts = {};
+    const frameworkChains = {};
     filteredChains.forEach((chain) => {
       const framework = chain.framework || "N/A";
       frameworkCounts[framework] = (frameworkCounts[framework] || 0) + 1;
+      if (!frameworkChains[framework]) frameworkChains[framework] = [];
+      frameworkChains[framework].push(chain.name);
     });
 
     // Chain by L2/L3
     const layerCounts = {};
+    const layerChains = {};
     filteredChains.forEach((chain) => {
       const layer = chain.l2OrL3 || "N/A";
       layerCounts[layer] = (layerCounts[layer] || 0) + 1;
+      if (!layerChains[layer]) layerChains[layer] = [];
+      layerChains[layer].push(chain.name);
     });
 
     return {
       verticalCounts,
+      verticalChains,
       daCounts,
+      daChains,
       frameworkCounts,
+      frameworkChains,
       layerCounts,
+      layerChains,
     };
   }, [filteredChains]);
 
   // Handle X-Axis Option Change
   const handleXAxisOptionChange = (event) => {
     setXAxisOption(event.target.value);
+  };
+
+  // Handle Time Unit Change
+  const handleTimeUnitChange = (unit) => {
+    setTimeUnit(unit);
+    // Reset timeRange to default when timeUnit changes
+    setTimeRange(timeRangeOptions[unit][0]);
   };
 
   // Handle Time Range Change
@@ -561,15 +652,73 @@ const RaaSPage = () => {
 
             {/* Time Range Selector */}
             <div className="time-range-selector">
-              {timeRangeOptions.map((range) => (
-                <button
-                  key={range}
-                  className={timeRange === range ? "active" : ""}
-                  onClick={() => handleTimeRangeChange(range)}
+              {/* Left Side: Time Unit Buttons */}
+              <div className="time-range-left">
+                {["Daily", "Monthly"].map((unit) => (
+                  <button
+                    key={unit}
+                    className={timeUnit === unit ? "active" : ""}
+                    onClick={() => handleTimeUnitChange(unit)}
+                  >
+                    {unit}
+                  </button>
+                ))}
+              </div>
+              {/* Right Side: Time Range Buttons */}
+              <div className="time-range-right">
+                {timeRangeOptions[timeUnit].map((range) => (
+                  <button
+                    key={range}
+                    className={timeRange === range ? "active" : ""}
+                    onClick={() => handleTimeRangeChange(range)}
+                  >
+                    {range}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Filters */}
+            <div className="filters-container">
+              <div className="filter-dropdown">
+                <label>Vertical:</label>
+                <select
+                  value={selectedVertical}
+                  onChange={(e) => setSelectedVertical(e.target.value)}
                 >
-                  {range}
-                </button>
-              ))}
+                  {verticalOptions.map((vertical) => (
+                    <option key={vertical} value={vertical}>
+                      {vertical}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="filter-dropdown">
+                <label>Framework:</label>
+                <select
+                  value={selectedFramework}
+                  onChange={(e) => setSelectedFramework(e.target.value)}
+                >
+                  {frameworkOptions.map((framework) => (
+                    <option key={framework} value={framework}>
+                      {framework}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="filter-dropdown">
+                <label>L2/L3:</label>
+                <select
+                  value={selectedLayer}
+                  onChange={(e) => setSelectedLayer(e.target.value)}
+                >
+                  {layerOptions.map((layer) => (
+                    <option key={layer} value={layer}>
+                      {layer}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {/* Data Table */}
@@ -582,7 +731,8 @@ const RaaSPage = () => {
                       <th>Name</th>
                       <th>Vertical</th>
                       <th>TVL</th>
-                      <th>TPS</th>
+                      <th>Current TPS</th>
+                      <th>Max TPS</th>
                       <th>Tx Count</th>
                       <th>Active Accounts</th>
                     </tr>
@@ -635,7 +785,16 @@ const RaaSPage = () => {
                         </td>
                         <td>{chain.chainVertical}</td>
                         <td>${abbreviateNumber(chain.totalTvl, 2)}M</td>
-                        <td>{chain.averageChainTps.toFixed(2)}</td>
+                        <td>
+                          {chain.currentTps !== undefined
+                            ? chain.currentTps.toFixed(2)
+                            : "N/A"}
+                        </td>
+                        <td>
+                          {chain.maxTps !== undefined
+                            ? chain.maxTps.toFixed(2)
+                            : "N/A"}
+                        </td>
                         <td>{abbreviateNumber(chain.totalTransactions, 2)}</td>
                         <td>
                           {abbreviateNumber(chain.totalActiveAccounts, 2)}
@@ -660,12 +819,15 @@ const RaaSPage = () => {
                 </select>
               </div>
               <div className="charts-grid">
-                {/* Transaction Count Chart */}
                 <div className="chart-card">
                   <h4>Transaction Count</h4>
                   <Bar
                     data={{
-                      labels: activityChartData.dates,
+                      labels: activityChartData.dates.map((date) =>
+                        timeUnit === "Daily"
+                          ? moment(date).format("D MMM")
+                          : moment(date).format("MMM YYYY")
+                      ),
                       datasets: [
                         {
                           label: "Transactions",
@@ -706,7 +868,11 @@ const RaaSPage = () => {
                   <h4>Active Accounts</h4>
                   <Bar
                     data={{
-                      labels: activityChartData.dates,
+                      labels: activityChartData.dates.map((date) =>
+                        timeUnit === "Daily"
+                          ? moment(date).format("D MMM")
+                          : moment(date).format("MMM YYYY")
+                      ),
                       datasets: [
                         {
                           label: "Active Accounts",
@@ -747,7 +913,11 @@ const RaaSPage = () => {
                   <h4>Total Value Locked (TVL)</h4>
                   <Line
                     data={{
-                      labels: activityChartData.dates,
+                      labels: activityChartData.dates.map((date) =>
+                        timeUnit === "Daily"
+                          ? moment(date).format("D MMM")
+                          : moment(date).format("MMM YYYY")
+                      ),
                       datasets: [
                         {
                           label: "TVL",
@@ -786,15 +956,18 @@ const RaaSPage = () => {
                     }}
                   />
                 </div>
-                {/* Average TPS Chart */}
                 <div className="chart-card">
                   <h4>Average TPS</h4>
                   <Line
                     data={{
-                      labels: activityChartData.dates,
+                      labels: activityChartData.dates.map((date) =>
+                        timeUnit === "Daily"
+                          ? moment(date).format("D MMM")
+                          : moment(date).format("MMM YYYY")
+                      ),
                       datasets: [
                         {
-                          label: "TPS",
+                          label: "Average TPS",
                           data: activityChartData.tpsValues,
                           borderColor: "#4BC0C0",
                           backgroundColor: "rgba(75, 192, 192, 0.2)",
@@ -809,9 +982,39 @@ const RaaSPage = () => {
                         legend: {
                           display: false,
                         },
+                        title: {
+                          display: true,
+                          text: `Average TPS Over Time - ${timeRange}`,
+                          color: "#FFFFFF",
+                        },
+                        tooltip: {
+                          mode: "index",
+                          intersect: false,
+                          callbacks: {
+                            title: function (context) {
+                              let dateLabel = context[0].label;
+                              return dateLabel;
+                            },
+                            label: function (context) {
+                              let label = context.dataset.label || "";
+                              let value = context.parsed.y;
+                              return `${label}: ${
+                                value !== undefined ? value.toFixed(2) : "N/A"
+                              }`;
+                            },
+                          },
+                          backgroundColor: "rgba(0,0,0,0.7)",
+                          titleColor: "#FFFFFF",
+                          bodyColor: "#FFFFFF",
+                        },
                       },
                       scales: {
                         x: {
+                          title: {
+                            display: true,
+                            text: timeUnit === "Daily" ? "Date" : "Month",
+                            color: "#FFFFFF",
+                          },
                           ticks: {
                             color: "#FFFFFF",
                             maxRotation: 45,
@@ -821,10 +1024,20 @@ const RaaSPage = () => {
                           },
                         },
                         y: {
+                          title: {
+                            display: true,
+                            text: "Average TPS",
+                            color: "#FFFFFF",
+                          },
                           ticks: {
                             color: "#FFFFFF",
                             beginAtZero: true,
                           },
+                        },
+                      },
+                      elements: {
+                        point: {
+                          radius: 0, // Remove dots from the chart
                         },
                       },
                     }}
@@ -866,6 +1079,18 @@ const RaaSPage = () => {
                             color: "#FFFFFF",
                           },
                         },
+                        tooltip: {
+                          callbacks: {
+                            label: function (tooltipItem) {
+                              const index = tooltipItem.dataIndex;
+                              const label = tooltipItem.label;
+                              const count = tooltipItem.dataset.data[index];
+                              const chainNames =
+                                ecosystemChartData.verticalChains[label];
+                              return [`${label}: ${count}`, ...chainNames];
+                            },
+                          },
+                        },
                       },
                     }}
                   />
@@ -896,6 +1121,18 @@ const RaaSPage = () => {
                           position: "right",
                           labels: {
                             color: "#FFFFFF",
+                          },
+                        },
+                        tooltip: {
+                          callbacks: {
+                            label: function (tooltipItem) {
+                              const index = tooltipItem.dataIndex;
+                              const label = tooltipItem.label;
+                              const count = tooltipItem.dataset.data[index];
+                              const chainNames =
+                                ecosystemChartData.daChains[label];
+                              return [`${label}: ${count}`, ...chainNames];
+                            },
                           },
                         },
                       },
@@ -932,6 +1169,18 @@ const RaaSPage = () => {
                             color: "#FFFFFF",
                           },
                         },
+                        tooltip: {
+                          callbacks: {
+                            label: function (tooltipItem) {
+                              const index = tooltipItem.dataIndex;
+                              const label = tooltipItem.label;
+                              const count = tooltipItem.dataset.data[index];
+                              const chainNames =
+                                ecosystemChartData.frameworkChains[label];
+                              return [`${label}: ${count}`, ...chainNames];
+                            },
+                          },
+                        },
                       },
                     }}
                   />
@@ -964,6 +1213,18 @@ const RaaSPage = () => {
                             color: "#FFFFFF",
                           },
                         },
+                        tooltip: {
+                          callbacks: {
+                            label: function (tooltipItem) {
+                              const index = tooltipItem.dataIndex;
+                              const label = tooltipItem.label;
+                              const count = tooltipItem.dataset.data[index];
+                              const chainNames =
+                                ecosystemChartData.layerChains[label];
+                              return [`${label}: ${count}`, ...chainNames];
+                            },
+                          },
+                        },
                       },
                     }}
                   />
@@ -976,4 +1237,5 @@ const RaaSPage = () => {
     </div>
   );
 };
+
 export default RaaSPage;
