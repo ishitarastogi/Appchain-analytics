@@ -28,7 +28,7 @@ import {
   fetchAllTvlData,
 } from "../services/googleSheetService";
 import moment from "moment";
-import { saveData, getData, clearAllData } from "../services/indexedDBService";
+import { saveData, getData } from "../services/indexedDBService";
 
 // DA Logos
 import EthereumDALogo from "../assets/logos/da/ethereum.png";
@@ -124,13 +124,13 @@ const RaaSPage = () => {
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // New State Variables for Time Range Selector
+  // State Variables for Time Range Selector
   const [timeUnit, setTimeUnit] = useState("Daily"); // "Daily" or "Monthly"
   const [timeRange, setTimeRange] = useState("90 days");
 
   const [xAxisOption, setXAxisOption] = useState("Chain"); // Options: Chain, Vertical, Framework, L2/L3
 
-  // New State Variables for Filters
+  // State Variables for Filters
   const [selectedVertical, setSelectedVertical] = useState("All Verticals");
   const [selectedFramework, setSelectedFramework] = useState("All Frameworks");
   const [selectedLayer, setSelectedLayer] = useState("All Layers");
@@ -216,7 +216,15 @@ const RaaSPage = () => {
         chain.projectId // Ensure projectId is present
     );
 
-    setAllChains(mainnetChains);
+    // Assign a default logo if chainLogo is missing
+    const chainsWithLogos = mainnetChains.map((chain) => ({
+      ...chain,
+      chainLogo:
+        chain.chainLogo ||
+        "https://www.helika.io/wp-content/uploads/2023/09/proofofplay_logo.png", // Default logo URL
+    }));
+
+    setAllChains(chainsWithLogos);
     setTransactionsByChainDate(transactionsData.transactionsByChainDate);
     setActiveAccountsByChainDate(activeAccountsData.activeAccountsByChainDate);
     setTpsDataByChainDate(tpsData.tpsDataByChainDate);
@@ -416,7 +424,7 @@ const RaaSPage = () => {
       filteredChains
         .map((chain) => {
           const chainName = chain.name;
-          const chainLogo = chain.logoUrl || "";
+          const chainLogo = chain.logoUrl || ""; // Use logoUrl
           const chainVertical = chain.vertical || "N/A";
           const chainFramework = chain.framework || "N/A";
           const chainDA = chain.da || "N/A";
@@ -472,9 +480,9 @@ const RaaSPage = () => {
           };
         })
         //.filter((chain) => chain !== null) // Remove null entries (now unnecessary)
-        .sort((a, b) => b.currentTvl - a.currentTvl) // Sort by TVL descending
-      //.slice(0, 10) // Remove this line to include all chains
-    );
+        .sort((a, b) => b.currentTvl - a.currentTvl)
+    ); // Sort by TVL descending
+    //.slice(0, 10) // Remove this line to include all chains
   }, [
     filteredChains,
     tvlDataByChainDate,
@@ -554,7 +562,7 @@ const RaaSPage = () => {
       // Per-chain data
       filteredChains.forEach((chain, index) => {
         const chainName = chain.name;
-        const color = `hsl(${(index * 50) % 360}, 70%, 50%)`;
+        const color = getColorForChain(chainName);
 
         // Transactions
         const transactionData = dates.map((date) => {
@@ -767,6 +775,7 @@ const RaaSPage = () => {
 
         {!loading && (
           <>
+            {/* Time Range Selector */}
             <div className="time-range-selector">
               <div className="time-range-left">
                 {["Daily", "Monthly"].map((unit) => (
@@ -815,6 +824,8 @@ const RaaSPage = () => {
                 <p>{averageTPS.toFixed(2)}</p>
               </div>
             </div>
+
+            {/* Launch Timeline */}
             <h3 style={{ marginLeft: "30px" }}>Launch Timeline</h3>
 
             {/* Launch Timeline Chart */}
@@ -863,8 +874,6 @@ const RaaSPage = () => {
                 </div>
               </div>
             </div>
-
-            {/* Time Range Selector */}
 
             {/* Filters */}
             <div className="filters-container">
@@ -929,10 +938,27 @@ const RaaSPage = () => {
                     {tableData.map((chain, index) => (
                       <tr key={index}>
                         <td className="chain-name-cell">
-                          <div className="chain-name">
-                            {chain.chainName}
-                            <div className="logo-container">
-                              {/* Framework Logo */}
+                          {/* Chain Logo */}
+                          <img
+                            src={chain.chainLogo}
+                            alt={chain.chainName}
+                            className="chain-logo"
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src =
+                                "https://www.helika.io/wp-content/uploads/2023/09/proofofplay_logo.png"; // Fallback logo
+                            }}
+                          />
+                          {/* Chain Details */}
+                          <div className="chain-name-details">
+                            {/* Chain Name */}
+                            <span className="chain-name">
+                              {chain.chainName}
+                            </span>
+
+                            {/* Framework with Small Logo */}
+                            <span className="chain-framework">
+                              Framework: {chain.chainFramework}
                               {chain.chainFramework && (
                                 <img
                                   src={getFrameworkLogo(chain.chainFramework)}
@@ -941,7 +967,11 @@ const RaaSPage = () => {
                                   title={chain.chainFramework}
                                 />
                               )}
-                              {/* DA Logo */}
+                            </span>
+
+                            {/* DA with Small Logo */}
+                            <span className="chain-da">
+                              DA: {chain.chainDA}
                               {chain.chainDA && (
                                 <img
                                   src={getDALogo(chain.chainDA)}
@@ -950,16 +980,20 @@ const RaaSPage = () => {
                                   title={chain.chainDA}
                                 />
                               )}
-                              {/* Settlement Logo */}
-                              {chain.chainSettlement && (
+                            </span>
+
+                            {/* Settlement with Small Logo (Optional) */}
+                            {chain.chainSettlement && (
+                              <span className="chain-settlement">
+                                Settlement: {chain.chainSettlement}
                                 <img
                                   src={getSettlementLogo(chain.chainSettlement)}
                                   alt={chain.chainSettlement}
                                   className="small-logo"
                                   title={chain.chainSettlement}
                                 />
-                              )}
-                            </div>
+                              </span>
+                            )}
                           </div>
                         </td>
                         <td>{chain.chainVertical}</td>
@@ -997,7 +1031,7 @@ const RaaSPage = () => {
 
             {/* Activity Charts */}
             <div className="activity-charts-section">
-              <h2>Activity charts</h2>
+              <h2>Activity Charts</h2>
 
               <div className="charts-grid">
                 {/* Transaction Count Chart */}
@@ -1235,7 +1269,7 @@ const RaaSPage = () => {
 
             {/* Ecosystem Charts */}
             <div className="ecosystem-charts-section">
-              <h2>Ecosystem charts</h2>
+              <h2>Ecosystem Charts</h2>
               <div className="charts-grid">
                 {/* Chain by Vertical */}
                 <div className="chart-card">

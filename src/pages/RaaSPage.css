@@ -19,6 +19,7 @@
   flex-direction: column;
   overflow-y: auto; /* Allow vertical scrolling */
 }
+
 /* RaaS Header */
 .raas-header {
   display: flex;
@@ -119,6 +120,7 @@
     flex: 1 1 100%; /* Full width on small screens */
   }
 }
+
 /* Launch Timeline Section */
 .launch-timeline-section {
   margin: 20px 35px;
@@ -227,6 +229,7 @@
   border-bottom: 1px solid #333;
   margin-top: 30px;
 }
+
 /* Left and Right groups inside the selector */
 .time-range-left,
 .time-range-right {
@@ -335,21 +338,47 @@ tr:hover {
   align-items: center;
 }
 
+/* Chain Logo */
+.chain-logo {
+  width: 40px; /* Adjust size as needed */
+  height: 40px;
+  object-fit: contain;
+  margin-right: 10px; /* Space between logo and chain details */
+  border-radius: 5px;
+}
+
+/* Chain Name Details */
+.chain-name-details {
+  display: flex;
+  flex-direction: column;
+  margin-left: 10px; /* Space between logo and details */
+}
+
+/* Chain Name */
 .chain-name {
+  font-weight: bold;
+  margin-bottom: 5px;
+  color: #ffffff;
+}
+
+/* Framework and DA */
+.chain-framework,
+.chain-da,
+.chain-settlement {
   display: flex;
   align-items: center;
+  font-size: 0.9rem;
+  color: #cccccc;
+  margin-bottom: 3px;
 }
 
-.logo-container {
-  display: flex;
-  gap: 5px;
-  margin-left: 10px;
-}
-
+/* Small Logos */
 .small-logo {
   width: 20px;
   height: 20px;
   object-fit: contain;
+  margin-left: 5px; /* Space between text and small logo */
+  border-radius: 3px;
 }
 
 /* Chart Options */
@@ -514,23 +543,4 @@ tr:hover {
   .chart-card {
     width: 100%;
   }
-}
-
-.chain-name {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-}
-
-.logo-container {
-  display: flex;
-  gap: 5px; /* Space between logos */
-  margin-top: 5px; /* Space above logos */
-}
-
-.small-logo {
-  width: 30px; /* Adjust size as needed */
-  height: 30px;
-  object-fit: contain;
-  border-radius: 3px;
 }
