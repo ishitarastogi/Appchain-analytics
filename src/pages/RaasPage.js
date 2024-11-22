@@ -142,7 +142,7 @@ const RaaSPage = () => {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      await clearAllData();
+      // await clearAllData();
       try {
         // Retrieve data from IndexedDB
         console.log("🔍 Attempting to retrieve data from IndexedDB...");
