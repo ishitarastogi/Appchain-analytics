@@ -83,7 +83,7 @@
 
 .stats-card {
   flex: 1; /* Allow the card to grow and fill the available space */
-  background-color: #1c1c1c;
+  background-color: #1a1a1a;
   padding: 15px;
   border-radius: 8px;
   text-align: center;
@@ -134,7 +134,7 @@
 .timeline-horizontal-line {
   width: 100%;
   height: 2px;
-  background-color: #ff3b57;
+  background-color: #666666;
   position: absolute;
   top: 95%; /* Center the horizontal line vertically */
   left: 0;
@@ -159,7 +159,7 @@
 /* Vertical line */
 .vertical-line {
   width: 2px;
-  background-color: #ff3b57;
+  background-color: #666666;
   position: absolute;
 }
 
@@ -179,7 +179,7 @@
 .timeline-dot {
   width: 12px;
   height: 12px;
-  background-color: #ff3b57;
+  background-color: #666666;
   border-radius: 50%;
   position: absolute;
   left: 50%;
@@ -217,47 +217,7 @@
   top: calc(50% + 55px); /* Position below the dot */
 }
 
-.time-range-selector {
-  display: flex;
-  justify-content: space-between;
-  position: -webkit-sticky; /* Safari support */
-  position: sticky;
-  top: 0; /* Stick at the top of the parent container */
-  background-color: #000; /* Match the page background */
-  z-index: 10; /* Ensure it stays above other elements */
-  padding: 10px 0;
-  border-bottom: 1px solid #333;
-  margin-top: 30px;
-}
-
-/* Left and Right groups inside the selector */
-.time-range-left,
-.time-range-right {
-  display: flex;
-  gap: 10px;
-}
-
-.time-range-left button,
-.time-range-right button {
-  background: transparent;
-  color: #ffffff;
-  border: 1px solid #ffffff;
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: background-color 0.3s, color 0.3s;
-  border-radius: 8px;
-}
-
-.time-range-left button.active,
-.time-range-right button.active {
-  background-color: #ff3b57;
-  border: none;
-}
-
-.time-range-left button:hover,
-.time-range-right button:hover {
-  background-color: #333;
-}
+/*  */
 
 /* Filters Container */
 .filters-container {

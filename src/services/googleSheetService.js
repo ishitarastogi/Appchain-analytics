@@ -72,20 +72,24 @@ export const fetchLatestTpsData = async (projectId) => {
       !response.data[0] ||
       !response.data[0].result ||
       !response.data[0].result.data ||
-      !response.data[0].result.data.json
+      !response.data[0].result.data.json ||
+      !response.data[0].result.data.json.data
     ) {
       throw new Error(
         `Invalid response structure from the proxy for ${projectId}`
       );
     }
 
-    const data = response.data[0].result.data.json;
+    // Access the correct data array
+    const data = response.data[0].result.data.json.data;
+    console.log("data", data);
 
     // Process the TPS data
     // Data is an array of arrays: [[timestamp, tpsValue, ...], ...]
     const tpsData = data.map((item) => {
       const timestamp = item[0]; // Unix timestamp in seconds
       const tpsValue = item[1] / 86400; // TPS value
+      console.log(tpsValue);
       const date = moment.unix(timestamp).format("YYYY-MM-DD");
       return {
         date,

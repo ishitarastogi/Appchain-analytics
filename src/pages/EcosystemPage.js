@@ -8,12 +8,11 @@ import "./EcosystemPage.css";
 import { Pie, Bar } from "react-chartjs-2";
 import {
   fetchGoogleSheetData,
-  fetchAllTransaction, // Updated import
+  fetchAllTransaction,
   fetchAllTvlData,
   fetchAllActiveAccounts,
 } from "../services/googleSheetService";
-import { abbreviateNumber } from "../utils/numberFormatter";
-import { saveData, getData, clearAllData } from "../services/indexedDBService"; // Ensure deleteData is exported
+import { saveData, getData, clearAllData } from "../services/indexedDBService";
 
 // Register required components for Chart.js
 import {
@@ -37,7 +36,24 @@ ChartJS.register(
 
 const ECOSYSTEM_DATA_ID = "ecosystemData"; // Ensure consistent casing
 const SIX_HOURS_IN_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
+// Custom Number Formatter
+const abbreviateNumber = (number, decimals = 2) => {
+  if (number === null || number === undefined || isNaN(number)) return "0";
 
+  const absNumber = Math.abs(number);
+
+  if (absNumber >= 1.0e8) {
+    // For numbers >= 100,000,000 → Million (scaled by 100,000,000)
+    return (number / 1.0e8).toFixed(decimals) + "M";
+  }
+
+  if (absNumber >= 1.0e5) {
+    // For numbers >= 100,000 → Thousand (scaled by 100,000)
+    return (number / 1.0e5).toFixed(decimals) + "K";
+  }
+
+  return number.toLocaleString(); // Formats number with commas
+};
 const EcosystemPage = () => {
   // State variables
   const [raasOptions, setRaasOptions] = useState(["All Raas"]);
@@ -893,6 +909,9 @@ const EcosystemPage = () => {
                                         "https://www.helika.io/wp-content/uploads/2023/09/proofofplay_logo.png";
                                     }}
                                   />
+                                  {/* <span className="chain-metric">
+                                    {abbreviateNumber(chain.metricValue, 2)}
+                                  </span> */}
                                 </div>
                               ))}
                             </div>

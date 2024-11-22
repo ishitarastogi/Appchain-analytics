@@ -46,7 +46,7 @@ const daLogos = {
   celestia: CelestiaLogo,
 };
 const frameworkLogos = {
-  opstack: OPStackLogo,
+  "OP Stack": OPStackLogo,
   orbit: OrbitLogo,
 };
 
@@ -226,7 +226,7 @@ const TopChains = () => {
   if (loading) {
     return (
       <div className="top-chains-container">
-        <h2 className="top-chains-heading">Top 6 Blockchain Chains</h2>
+        <h2 className="top-chains-heading">Top 6 Chains</h2>
         <div className="spinner"></div> {/* Optional: Add spinner */}
       </div>
     );

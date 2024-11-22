@@ -1,6 +1,6 @@
 // src/pages/TvlPage.js
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChartLine } from "@fortawesome/free-solid-svg-icons";
@@ -26,6 +26,8 @@ import {
 import moment from "moment";
 import { saveData, getData, clearAllData } from "../services/indexedDBService";
 
+// Import the standardized abbreviation function
+
 // Register Chart.js components
 ChartJS.register(
   LineElement,
@@ -38,7 +40,25 @@ ChartJS.register(
   Legend,
   ArcElement
 );
+const abbreviateNumber = (number, decimals = 2) => {
+  if (number === null || number === undefined || isNaN(number)) return "0";
 
+  const absNumber = Math.abs(number);
+
+  if (absNumber >= 1.0e8) {
+    // For numbers >= 100,000,000 → Million (scaled by 100,000,000)
+    return (number / 1.0e8).toFixed(decimals) + "M";
+  }
+
+  if (absNumber >= 1.0e5) {
+    // For numbers >= 100,000 → Thousand (scaled by 100,000)
+    return (number / 1.0e5).toFixed(decimals) + "K";
+  }
+
+  return number.toLocaleString(); // Formats number with commas
+};
+
+// Constants
 const TVL_DATA_ID = "tvlData"; // Unique ID for IndexedDB
 const SIX_HOURS_IN_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
 
@@ -133,6 +153,19 @@ const TvlPage = () => {
 
     setAllChains(mainnetChains);
     setTvlDataByChainDate(tvlDataFetched.tvlDataByChainDate);
+
+    // Debugging: Log a sample of TVL data
+    if (mainnetChains.length > 0) {
+      const sampleChain = mainnetChains[0];
+      const chainTvlData =
+        tvlDataFetched.tvlDataByChainDate[sampleChain.name] || {};
+      const sampleDate = Object.keys(chainTvlData)[0];
+      const sampleTvl = sampleDate ? chainTvlData[sampleDate].totalTvl : 0;
+      console.log(
+        `Sample TVL for ${sampleChain.name} on ${sampleDate}:`,
+        sampleTvl
+      );
+    }
   };
 
   const updateChartData = () => {
@@ -168,7 +201,7 @@ const TvlPage = () => {
         (date) => tvlDataByChainDate[chain.name]?.[date]?.totalTvl || 0
       );
       const total = tvlValues.reduce((acc, val) => acc + val, 0);
-      const average = total / tvlValues.length || 0;
+      const average = tvlValues.length > 0 ? total / tvlValues.length : 0;
       return { name: chain.name, average };
     });
 
@@ -181,8 +214,8 @@ const TvlPage = () => {
 
       if (timeUnit === "Daily") {
         dates.forEach((date) => {
-          const value = tvlDataByChainDate[chainName]?.[date]?.totalTvl || 0;
-          chainData.push(value);
+          const rawValue = tvlDataByChainDate[chainName]?.[date]?.totalTvl || 0;
+          chainData.push(rawValue); // Use raw value
         });
       } else {
         const monthlyData = aggregateMonthlyData(
@@ -191,8 +224,8 @@ const TvlPage = () => {
         );
         const months = getMonthlyLabels(dates);
         months.forEach((month) => {
-          const value = monthlyData[month]?.totalTvl || 0;
-          chainData.push(value);
+          const rawValue = monthlyData[month]?.totalTvl || 0;
+          chainData.push(rawValue); // Use raw value
         });
       }
 
@@ -228,10 +261,10 @@ const TvlPage = () => {
         dateDifference = 365;
         break;
       case "3 Months":
-        dateDifference = 90;
+        dateDifference = 90; // Approximation
         break;
       case "6 Months":
-        dateDifference = 180;
+        dateDifference = 180; // Approximation
         break;
       case "All":
         // Find the earliest date in tvlDataByChainDate
@@ -311,7 +344,7 @@ const TvlPage = () => {
     // For each chain, compute the required data
     filteredChains.forEach((chain) => {
       const chainName = chain.name;
-      const chainLogo = chain.logoUrl || "";
+      const chainLogo = chain.logoUrl || ""; // Use logoUrl
       const chainVertical = chain.vertical || "N/A";
       const chainRaas = chain.raas || "N/A";
       const chainFramework = chain.framework || "N/A";
@@ -321,8 +354,13 @@ const TvlPage = () => {
 
       // Get the latest TVL value (current day)
       const dateKeys = Object.keys(chainTvlData);
-      const latestDate = dateKeys[dateKeys.length - 1];
-      const currentTvl = chainTvlData[latestDate]?.totalTvl || 0;
+      const latestDate =
+        dateKeys.length > 0 ? dateKeys[dateKeys.length - 1] : null;
+      const rawTvl = latestDate ? chainTvlData[latestDate]?.totalTvl || 0 : 0;
+      const formattedTvl = abbreviateNumber(rawTvl); // Use the standard function
+
+      // Debugging: Log current TVL for each chain
+      console.log(`Current TVL for ${chainName}:`, formattedTvl);
 
       tableData.push({
         chainName,
@@ -331,7 +369,7 @@ const TvlPage = () => {
         chainRaas,
         chainFramework,
         chainDa,
-        currentTvl,
+        currentTvl: rawTvl,
       });
     });
 
@@ -353,12 +391,16 @@ const TvlPage = () => {
       const chainName = chain.name;
       const chainTvlData = tvlDataByChainDate[chainName] || {};
       const dateKeys = Object.keys(chainTvlData);
-      const latestDate = dateKeys[dateKeys.length - 1];
-      const currentTvl = chainTvlData[latestDate]?.totalTvl || 0;
+      const latestDate =
+        dateKeys.length > 0 ? dateKeys[dateKeys.length - 1] : null;
+      const rawTvl = latestDate ? chainTvlData[latestDate]?.totalTvl || 0 : 0;
       totalTvlAllChains.push({
         chainName,
-        currentTvl,
+        currentTvl: rawTvl,
       });
+
+      // Debugging: Log total TVL for each chain
+      console.log(`Pie Chart - Chain: ${chainName}, TVL: ${rawTvl}`);
     });
 
     // Sort chains by TVL
@@ -398,13 +440,17 @@ const TvlPage = () => {
       const chainRaas = chain.raas || "Unknown";
       const chainTvlData = tvlDataByChainDate[chainName] || {};
       const dateKeys = Object.keys(chainTvlData);
-      const latestDate = dateKeys[dateKeys.length - 1];
-      const currentTvl = chainTvlData[latestDate]?.totalTvl || 0;
+      const latestDate =
+        dateKeys.length > 0 ? dateKeys[dateKeys.length - 1] : null;
+      const rawTvl = latestDate ? chainTvlData[latestDate]?.totalTvl || 0 : 0;
 
       if (!raasTvlMap[chainRaas]) {
         raasTvlMap[chainRaas] = 0;
       }
-      raasTvlMap[chainRaas] += currentTvl;
+      raasTvlMap[chainRaas] += rawTvl;
+
+      // Debugging: Log TVL per RaaS provider
+      console.log(`Pie Chart - RaaS: ${chainRaas}, TVL: ${rawTvl}`);
     });
 
     const raasLabels = Object.keys(raasTvlMap);
@@ -417,6 +463,7 @@ const TvlPage = () => {
       Alchemy: "#4185F4",
       Caldera: "#EC6731",
       Altlayer: "#B28AFE",
+      Unknown: "#CCCCCC", // Default color for unknown RaaS
     };
 
     setRaasPieData({
@@ -476,20 +523,6 @@ const TvlPage = () => {
       color += letters[Math.floor(Math.random() * 16)];
     }
     return color;
-  };
-
-  const formatTvlValue = (value) => {
-    if (value == null || isNaN(value)) {
-      return "0.00";
-    } else if (value >= 1e9) {
-      return (value / 1e9).toFixed(2) + "B";
-    } else if (value >= 1e6) {
-      return (value / 1e6).toFixed(2) + "M";
-    } else if (value >= 1e3) {
-      return (value / 1e3).toFixed(2) + "K";
-    } else {
-      return value.toFixed(2);
-    }
   };
 
   return (
@@ -594,7 +627,7 @@ const TvlPage = () => {
                       label: function (context) {
                         let label = context.dataset.label || "";
                         let value = context.parsed.y;
-                        value = "$" + formatTvlValue(value);
+                        value = "$" + abbreviateNumber(value);
                         return `${label}: ${value}`;
                       },
                     },
@@ -642,7 +675,7 @@ const TvlPage = () => {
                       color: "#FFFFFF",
                       beginAtZero: true,
                       callback: function (value) {
-                        return "$" + formatTvlValue(value);
+                        return "$" + abbreviateNumber(value);
                       },
                     },
                   },
@@ -695,7 +728,7 @@ const TvlPage = () => {
                       </td>
                       <td>{chain.chainRaas}</td>
                       <td>{chain.chainVertical}</td>
-                      <td>${formatTvlValue(chain.currentTvl)}</td>
+                      <td>${abbreviateNumber(chain.currentTvl)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -714,6 +747,7 @@ const TvlPage = () => {
                 <Pie
                   data={topChainsPieData}
                   options={{
+                    responsive: true,
                     plugins: {
                       legend: {
                         position: "right",
@@ -733,7 +767,7 @@ const TvlPage = () => {
                             const percentage = ((value / total) * 100).toFixed(
                               2
                             );
-                            return `${label}: $${formatTvlValue(
+                            return `${label}: $${abbreviateNumber(
                               value
                             )} (${percentage}%)`;
                           },
@@ -748,6 +782,7 @@ const TvlPage = () => {
                 <Pie
                   data={raasPieData}
                   options={{
+                    responsive: true,
                     plugins: {
                       legend: {
                         position: "right",
@@ -767,7 +802,7 @@ const TvlPage = () => {
                             const percentage = ((value / total) * 100).toFixed(
                               2
                             );
-                            return `${label}: $${formatTvlValue(
+                            return `${label}: $${abbreviateNumber(
                               value
                             )} (${percentage}%)`;
                           },

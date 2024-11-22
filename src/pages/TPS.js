@@ -1,5 +1,3 @@
-// src/pages/TpssPage.js
-
 import React, { useState, useEffect } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -22,9 +20,11 @@ import {
   fetchGoogleSheetData,
   fetchAllTpsData,
 } from "../services/googleSheetService";
-import { abbreviateNumber, formatNumber } from "../utils/numberFormatter";
 import moment from "moment";
 import { saveData, getData, clearAllData } from "../services/indexedDBService";
+
+// Remove the import of numberFormatter since we'll define the functions here
+// import { abbreviateNumber, formatNumber } from "../utils/numberFormatter";
 
 // Register Chart.js components
 ChartJS.register(
@@ -40,6 +40,34 @@ ChartJS.register(
 
 const TPS_DATA_ID = "tpsData"; // Unique ID for IndexedDB
 const SIX_HOURS_IN_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
+
+// Define abbreviateNumber function
+function abbreviateNumber(value) {
+  let newValue = value;
+  const suffixes = ["", "K", "M", "B", "T", "P", "E"];
+  let suffixNum = 0;
+
+  while (newValue >= 1000 && suffixNum < suffixes.length - 1) {
+    newValue /= 1000;
+    suffixNum++;
+  }
+
+  // Format number to have at most 2 decimal digits, and remove trailing zeros and decimal point if not needed
+  let formattedValue = formatNumber(newValue);
+  return formattedValue + suffixes[suffixNum];
+}
+
+// Define formatNumber function
+function formatNumber(value) {
+  if (Number.isInteger(value)) {
+    return value.toString();
+  } else {
+    // Ensure we have at most 2 decimal places
+    let fixedValue = value.toFixed(2);
+    // Remove unnecessary trailing zeros and decimal point
+    return parseFloat(fixedValue).toString();
+  }
+}
 
 const TpssPage = () => {
   // State variables
@@ -75,7 +103,7 @@ const TpssPage = () => {
       setLoading(true);
       try {
         // Uncomment the following line if you need to clear IndexedDB
-        // await clearAllData(); // Clear all data in IndexedDB
+        await clearAllData(); // Clear all data in IndexedDB
 
         const storedRecord = await getData(TPS_DATA_ID);
 
@@ -354,7 +382,6 @@ const TpssPage = () => {
       const chainLogo = chain.logoUrl || "";
       const chainVertical = chain.vertical || "N/A";
       const chainRaas = chain.raas || "N/A";
-      const chainPurpose = chain.purpose || "N/A"; // Assuming 'purpose' field
 
       const chainTpsData = tpsDataByChainDate[chainName] || {};
 
@@ -369,7 +396,6 @@ const TpssPage = () => {
         chainLogo,
         chainVertical,
         chainRaas,
-        chainPurpose,
         currentTps,
         maxTps,
       });
@@ -638,7 +664,6 @@ const TpssPage = () => {
                     <th>Current TPS</th>
                     <th>Max TPS</th>
                     <th>Vertical</th>
-                    <th>Purpose</th>
                     <th>RaaS Provider</th>
                   </tr>
                 </thead>
@@ -653,7 +678,7 @@ const TpssPage = () => {
                           onError={(e) => {
                             e.target.onerror = null;
                             e.target.src =
-                              "https://www.helika.io/wp-content/uploads/2023/09/proofofplay_logo.png";
+                              "https://www.verizon.com/learning/_next/static/images/87c8be7b206ab401b295fd1d21620b79.jpg";
                           }}
                         />
                         <span>{chain.chainName}</span>
@@ -661,7 +686,6 @@ const TpssPage = () => {
                       <td>{formatNumber(chain.currentTps)}</td>
                       <td>{formatNumber(chain.maxTps)}</td>
                       <td>{chain.chainVertical}</td>
-                      <td>{chain.chainPurpose}</td>
                       <td>{chain.chainRaas}</td>
                     </tr>
                   ))}
