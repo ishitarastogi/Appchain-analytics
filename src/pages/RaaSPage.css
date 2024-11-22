@@ -237,6 +237,24 @@
   color: #ffffff;
   margin-bottom: 5px;
 }
+/* RaaSPage.css */
+
+/* Existing styles... */
+
+/* Style for the Testnet label */
+.testnet-label {
+  display: block; /* Ensures it appears on a new line */
+  font-weight: bold;
+  color: red; /* You can change the color as desired */
+  margin-top: 5px; /* Adds some spacing above the label */
+}
+
+/* Optional: Adjustments to the chain-name-details to accommodate the new Testnet label */
+.chain-name-details {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
 
 .filter-dropdown select {
   background-color: #1c1c1c;

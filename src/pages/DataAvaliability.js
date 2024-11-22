@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo, useCallback } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChartPie } from "@fortawesome/free-solid-svg-icons";
-import "./DataAvailabilityPage.css";
+import "./DailyTransactionsPage.css";
 import { Pie, Bar } from "react-chartjs-2";
 import {
   fetchGoogleSheetData,

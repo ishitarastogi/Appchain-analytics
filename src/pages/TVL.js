@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChartLine } from "@fortawesome/free-solid-svg-icons";
-import "./DailyTransactionsPage.css";
+import "./TVL.css";
 import {
   Chart as ChartJS,
   LineElement,
@@ -421,17 +421,17 @@ const TvlPage = () => {
       top10Labels.push("Others");
       top10Data.push(othersTvl);
     }
-
     setTopChainsPieData({
       labels: top10Labels,
       datasets: [
         {
           data: top10Data,
           backgroundColor: top10Labels.map((label) => getColorForChain(label)),
+          borderWidth: 0, // Remove border
+          borderColor: "transparent", // Ensure border is transparent
         },
       ],
     });
-
     // Pie Chart for RaaS Providers TVL Market Share
     const raasTvlMap = {};
 
@@ -474,6 +474,8 @@ const TvlPage = () => {
           backgroundColor: raasLabels.map(
             (label) => raasColorMap[label] || getRandomColor()
           ),
+          borderWidth: 0, // Remove border
+          borderColor: "transparent", // Ensure border is transparent
         },
       ],
     });
@@ -742,7 +744,7 @@ const TvlPage = () => {
           <div className="pie-charts-section">
             <h3 className="section-title">Market Share</h3>
             <div className="pie-charts-container">
-              <div className="pie-chart-card">
+              <div className="pie-chart-card" style={{ border: "none" }}>
                 <h4>Top 10 Chains TVL Share</h4>
                 <Pie
                   data={topChainsPieData}
@@ -777,7 +779,7 @@ const TvlPage = () => {
                   }}
                 />
               </div>
-              <div className="pie-chart-card">
+              <div className="pie-chart-card" style={{ border: "none" }}>
                 <h4>RaaS Providers TVL Market Share</h4>
                 <Pie
                   data={raasPieData}

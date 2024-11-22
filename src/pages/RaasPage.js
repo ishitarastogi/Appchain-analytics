@@ -28,7 +28,7 @@ import {
   fetchAllTvlData,
 } from "../services/googleSheetService";
 import moment from "moment";
-import { saveData, getData } from "../services/indexedDBService";
+import { saveData, getData, clearAllData } from "../services/indexedDBService";
 
 // DA Logos
 import EthereumDALogo from "../assets/logos/da/ethereum.png";
@@ -40,8 +40,9 @@ import EigenDALogo from "../assets/logos/da/EigenDA.jpg"; // Renamed for clarity
 import OPStackLogo from "../assets/logos/framework/op.png";
 import OrbitLogo from "../assets/logos/framework/arbitrums.png";
 import PolygonLogo from "../assets/logos/framework/Polygon.jpeg";
-import Nova from "../assets/logos/framework/Nova.png";
+import NovaLogo from "../assets/logos/framework/Nova.png";
 
+// Register required components for Chart.js
 ChartJS.register(
   LineElement,
   BarElement,
@@ -90,23 +91,14 @@ const frameworkLogoMap = {
   "OP Stack": OPStackLogo,
   Orbit: OrbitLogo,
   Polygon: PolygonLogo,
-  "Arbitrum Nova": Nova,
+  "Arbitrum Nova": NovaLogo,
   // Add other Framework mappings as needed
-};
-
-// Settlement Logos Mapping
-const settlementLogoMap = {
-  // Example mappings; replace with actual logos and keys
-  Ethereum: EthereumDALogo,
-  "Arbitrum Nova": Nova,
 };
 
 // Utility functions to get logos
 const getDALogo = (daName) => daLogoMap[daName] || "/logos/default_da.png";
 const getFrameworkLogo = (frameworkName) =>
   frameworkLogoMap[frameworkName] || "/logos/default_framework.png";
-const getSettlementLogo = (settlementName) =>
-  settlementLogoMap[settlementName] || "/logos/default_settlement.png";
 
 const RAAS_DATA_ID = "raasPageData"; // Unique ID for IndexedDB
 
@@ -126,14 +118,7 @@ const RaaSPage = () => {
 
   // State Variables for Time Range Selector
   const [timeUnit, setTimeUnit] = useState("Daily"); // "Daily" or "Monthly"
-  const [timeRange, setTimeRange] = useState("90 days");
-
-  const [xAxisOption, setXAxisOption] = useState("Chain"); // Options: Chain, Vertical, Framework, L2/L3
-
-  // State Variables for Filters
-  const [selectedVertical, setSelectedVertical] = useState("All Verticals");
-  const [selectedFramework, setSelectedFramework] = useState("All Frameworks");
-  const [selectedLayer, setSelectedLayer] = useState("All Layers");
+  const [timeRange, setTimeRange] = useState("All"); // Default time range is "All"
 
   // Chart View Options
   const [chartView, setChartView] = useState("Total"); // Options: Total, Per Chain
@@ -142,16 +127,22 @@ const RaaSPage = () => {
   const raasOptions = ["Gelato", "Caldera", "Conduit", "Altlayer", "Alchemy"];
 
   const timeRangeOptions = {
-    Daily: ["90 days", "180 days", "1 Year", "All"],
+    Daily: ["Daily", "90 days", "180 days", "1 Year", "All"],
     Monthly: ["3 Months", "6 Months", "1 Year", "All"],
   };
 
-  const xAxisOptions = ["Chain", "Vertical", "Framework", "L2/L3"];
+  // DA and Framework Options (for filters)
+  const [selectedVertical, setSelectedVertical] = useState("All Verticals");
+  const [selectedFramework, setSelectedFramework] = useState("All Frameworks");
+  const [selectedLayer, setSelectedLayer] = useState("All Layers");
+
+  // Chart Colors Mapping
+  const [chainColorMap, setChainColorMap] = useState({});
 
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      // await clearAllData(); // Remove this line if you want to utilize caching
+      await clearAllData();
       try {
         // Retrieve data from IndexedDB
         console.log("🔍 Attempting to retrieve data from IndexedDB...");
@@ -208,27 +199,26 @@ const RaaSPage = () => {
       tvlData,
     } = data;
 
-    // Filter chains with status "Mainnet" and have a projectId
-    const mainnetChains = sheetData.filter(
-      (chain) =>
-        chain.status &&
-        chain.status.trim().toLowerCase() === "mainnet" &&
-        chain.projectId // Ensure projectId is present
-    );
-
-    // Assign a default logo if chainLogo is missing
-    const chainsWithLogos = mainnetChains.map((chain) => ({
+    // Include all chains
+    const allChainsData = sheetData.map((chain) => ({
       ...chain,
       chainLogo:
-        chain.chainLogo ||
+        chain.logoUrl ||
         "https://www.helika.io/wp-content/uploads/2023/09/proofofplay_logo.png", // Default logo URL
     }));
 
-    setAllChains(chainsWithLogos);
+    setAllChains(allChainsData);
     setTransactionsByChainDate(transactionsData.transactionsByChainDate);
     setActiveAccountsByChainDate(activeAccountsData.activeAccountsByChainDate);
     setTpsDataByChainDate(tpsData.tpsDataByChainDate);
     setTvlDataByChainDate(tvlData.tvlDataByChainDate);
+
+    // Initialize chainColorMap
+    const colorMap = {};
+    allChainsData.forEach((chain, index) => {
+      colorMap[chain.name] = getColorByIndex(index);
+    });
+    setChainColorMap(colorMap);
   };
 
   // Compute options for filters
@@ -262,6 +252,13 @@ const RaaSPage = () => {
       const matchesRaas =
         chain.raas && chain.raas.toLowerCase() === selectedRaas.toLowerCase();
 
+      const isMainnet =
+        chain.status && chain.status.trim().toLowerCase() === "mainnet";
+
+      // For Gelato, include all chains regardless of status
+      // For other RaaS, include only mainnet chains
+      const includeChain = selectedRaas.toLowerCase() === "gelato" || isMainnet;
+
       const matchesVertical =
         selectedVertical === "All Verticals" ||
         chain.vertical === selectedVertical;
@@ -273,7 +270,13 @@ const RaaSPage = () => {
       const matchesLayer =
         selectedLayer === "All Layers" || chain.l2OrL3 === selectedLayer;
 
-      return matchesRaas && matchesVertical && matchesFramework && matchesLayer;
+      return (
+        matchesRaas &&
+        includeChain &&
+        matchesVertical &&
+        matchesFramework &&
+        matchesLayer
+      );
     });
 
     setFilteredChains(filtered);
@@ -285,7 +288,57 @@ const RaaSPage = () => {
     selectedLayer,
   ]);
 
-  // Compute statistics
+  // Get filtered dates based on timeUnit and timeRange
+  const filteredDates = useMemo(() => {
+    const today = moment().endOf("day");
+    let startDate;
+
+    switch (timeRange) {
+      case "Daily":
+        // For Daily, get the most recent date
+        startDate = moment().subtract(1, "day").format("YYYY-MM-DD");
+        return [startDate];
+      case "90 days":
+        startDate = moment().subtract(90, "days").startOf("day");
+        break;
+      case "180 days":
+        startDate = moment().subtract(180, "days").startOf("day");
+        break;
+      case "1 Year":
+        startDate = moment().subtract(1, "year").startOf("day");
+        break;
+      case "3 Months":
+        startDate = moment().subtract(3, "months").startOf("day");
+        break;
+      case "6 Months":
+        startDate = moment().subtract(6, "months").startOf("day");
+        break;
+      case "All":
+        // Find the earliest launch date among the filtered chains
+        const launchDates = filteredChains
+          .filter((chain) => chain.launchDate)
+          .map((chain) => moment(chain.launchDate).startOf("day"));
+        if (launchDates.length > 0) {
+          startDate = moment.min(launchDates);
+        } else {
+          startDate = moment().subtract(1, "year").startOf("day"); // default to 1 year ago
+        }
+        break;
+      default:
+        startDate = moment().subtract(90, "days").startOf("day"); // default to 90 days
+    }
+
+    const dates = [];
+    let currentDate = moment(startDate);
+    while (currentDate.isSameOrBefore(today, "day")) {
+      dates.push(currentDate.format("YYYY-MM-DD"));
+      currentDate.add(1, timeUnit === "Daily" ? "day" : "month");
+    }
+    return dates;
+  }, [timeRange, timeUnit, filteredChains]);
+
+  // Statistics Calculations
+
   const totalProjects = filteredChains.length;
 
   const totalTransactions = useMemo(() => {
@@ -293,35 +346,38 @@ const RaaSPage = () => {
     filteredChains.forEach((chain) => {
       const chainName = chain.name;
       const chainTransactions = transactionsByChainDate[chainName] || {};
-      total += Object.values(chainTransactions).reduce(
-        (sum, val) => sum + (val.value || 0),
-        0
-      );
+      filteredDates.forEach((date) => {
+        if (chainTransactions[date]) {
+          total += chainTransactions[date].value || 0;
+        }
+      });
     });
     return total;
-  }, [filteredChains, transactionsByChainDate]);
+  }, [filteredChains, transactionsByChainDate, filteredDates]);
 
   const totalActiveAccounts = useMemo(() => {
     let total = 0;
     filteredChains.forEach((chain) => {
       const chainName = chain.name;
       const chainAccounts = activeAccountsByChainDate[chainName] || {};
-      total += Object.values(chainAccounts).reduce(
-        (sum, val) => sum + (val || 0),
-        0
-      );
+      filteredDates.forEach((date) => {
+        if (chainAccounts[date]) {
+          total += chainAccounts[date] || 0;
+        }
+      });
     });
     return total;
-  }, [filteredChains, activeAccountsByChainDate]);
+  }, [filteredChains, activeAccountsByChainDate, filteredDates]);
 
   const totalTVL = useMemo(() => {
     let total = 0;
     filteredChains.forEach((chain) => {
       const chainName = chain.name;
       const chainTvlData = tvlDataByChainDate[chainName] || {};
-      const dateKeys = Object.keys(chainTvlData);
-      if (dateKeys.length > 0) {
-        const latestDate = dateKeys.reduce((a, b) =>
+      // Get the latest TVL within the filtered dates
+      const relevantDates = filteredDates.filter((date) => chainTvlData[date]);
+      if (relevantDates.length > 0) {
+        const latestDate = relevantDates.reduce((a, b) =>
           moment(a).isAfter(b) ? a : b
         );
         const currentTvl = chainTvlData[latestDate]?.totalTvl || 0;
@@ -329,18 +385,18 @@ const RaaSPage = () => {
       }
     });
     return total;
-  }, [filteredChains, tvlDataByChainDate]);
+  }, [filteredChains, tvlDataByChainDate, filteredDates]);
 
-  // Adjusted Average TPS Calculation
   const averageTPS = useMemo(() => {
     let total = 0;
     let count = 0;
     filteredChains.forEach((chain) => {
       const chainName = chain.name;
       const chainTpsData = tpsDataByChainDate[chainName] || {};
-      const dateKeys = Object.keys(chainTpsData);
-      if (dateKeys.length > 0) {
-        const latestDate = dateKeys.reduce((a, b) =>
+      // Get the latest TPS within the filtered dates
+      const relevantDates = filteredDates.filter((date) => chainTpsData[date]);
+      if (relevantDates.length > 0) {
+        const latestDate = relevantDates.reduce((a, b) =>
           moment(a).isAfter(b) ? a : b
         );
         const currentTps = chainTpsData[latestDate] || 0;
@@ -350,58 +406,19 @@ const RaaSPage = () => {
     });
     // Avoid division by zero
     return count > 0 ? total / count : 0;
-  }, [filteredChains, tpsDataByChainDate]);
+  }, [filteredChains, tpsDataByChainDate, filteredDates]);
 
-  // Time Range Filtering based on timeUnit and timeRange
-  const getFilteredDates = () => {
-    const today = moment().format("YYYY-MM-DD");
-    let startDate;
-    let dateDifference;
-
-    switch (timeRange) {
-      case "90 days":
-      case "3 Months":
-        dateDifference = timeUnit === "Daily" ? 90 : 3 * 30; // Approximate months
-        break;
-      case "180 days":
-      case "6 Months":
-        dateDifference = timeUnit === "Daily" ? 180 : 6 * 30;
-        break;
-      case "1 Year":
-        dateDifference = 365;
-        break;
-      case "All":
-        // Find the earliest launch date among the filtered chains
-        const launchDates = filteredChains
-          .filter((chain) => chain.launchDate)
-          .map((chain) =>
-            moment(new Date(chain.launchDate)).format("YYYY-MM-DD")
-          );
-        if (launchDates.length > 0) {
-          startDate = launchDates.reduce((minDate, date) =>
-            date < minDate ? date : minDate
-          );
-        } else {
-          startDate = moment().subtract(1, "year").format("YYYY-MM-DD"); // default to 1 year ago
-        }
-        break;
-      default:
-        dateDifference = 90;
+  // Helper function to get period label
+  const getPeriodLabel = () => {
+    if (timeRange === "Daily") {
+      return "Yesterday";
+    } else if (timeUnit === "Daily") {
+      return timeRange;
+    } else if (timeUnit === "Monthly") {
+      return timeRange;
+    } else {
+      return "Selected Period";
     }
-
-    if (dateDifference) {
-      startDate = moment()
-        .subtract(dateDifference, "days")
-        .format("YYYY-MM-DD");
-    }
-
-    const dates = [];
-    let currentDate = moment(startDate);
-    while (currentDate.isSameOrBefore(today, "day")) {
-      dates.push(currentDate.format("YYYY-MM-DD"));
-      currentDate.add(1, "day");
-    }
-    return dates;
   };
 
   // Launch Timeline Chart Data
@@ -410,7 +427,7 @@ const RaaSPage = () => {
       .filter((chain) => chain.launchDate)
       .map((chain) => ({
         chainName: chain.name,
-        launchDate: moment(new Date(chain.launchDate)).format("YYYY-MM-DD"),
+        launchDate: moment(chain.launchDate).format("YYYY-MM-DD"),
       }))
       .sort((a, b) =>
         moment(a.launchDate).isBefore(moment(b.launchDate)) ? -1 : 1
@@ -420,80 +437,91 @@ const RaaSPage = () => {
 
   // Table Data
   const tableData = useMemo(() => {
-    return (
-      filteredChains
-        .map((chain) => {
-          const chainName = chain.name;
-          const chainLogo = chain.logoUrl || ""; // Use logoUrl
-          const chainVertical = chain.vertical || "N/A";
-          const chainFramework = chain.framework || "N/A";
-          const chainDA = chain.da || "N/A";
-          const chainSettlement = chain.settlementWhenL3 || "N/A"; // Ensure this property exists
+    return filteredChains
+      .map((chain) => {
+        const chainName = chain.name;
+        const chainLogo = chain.chainLogo || ""; // Use chainLogo
+        const chainVertical = chain.vertical || "N/A";
+        const chainFramework = chain.framework || "N/A";
+        const chainDA = chain.da || "N/A";
 
-          // TVL
-          const chainTvl = tvlDataByChainDate[chainName] || {};
-          const dateKeys = Object.keys(chainTvl);
-          let currentTvl = 0;
-          if (dateKeys.length > 0) {
-            const latestDate = dateKeys.reduce((a, b) =>
-              moment(a).isAfter(b) ? a : b
-            );
-            currentTvl = chainTvl[latestDate]?.totalTvl || 0;
-          }
-
-          // Total Transactions
-          const chainTransactions = transactionsByChainDate[chainName] || {};
-          const totalTransactions = Object.values(chainTransactions).reduce(
-            (sum, val) => sum + (val.value || 0),
-            0
+        // TVL
+        const chainTvl = tvlDataByChainDate[chainName] || {};
+        const relevantTvlDates = filteredDates.filter((date) => chainTvl[date]);
+        let currentTvl = 0;
+        if (relevantTvlDates.length > 0) {
+          const latestDate = relevantTvlDates.reduce((a, b) =>
+            moment(a).isAfter(b) ? a : b
           );
+          currentTvl = chainTvl[latestDate]?.totalTvl || 0;
+        }
 
-          // Total Active Accounts
-          const chainAccounts = activeAccountsByChainDate[chainName] || {};
-          const totalActiveAccounts = Object.values(chainAccounts).reduce(
-            (sum, val) => sum + (val || 0),
-            0
-          );
-
-          // Current TPS
-          const chainTpsData = tpsDataByChainDate[chainName] || {};
-          const tpsDateKeys = Object.keys(chainTpsData);
-          let currentTps = 0;
-          if (tpsDateKeys.length > 0) {
-            const latestTpsDate = tpsDateKeys.reduce((a, b) =>
-              moment(a).isAfter(b) ? a : b
-            );
-            currentTps = chainTpsData[latestTpsDate] || 0;
+        // Total Transactions within filtered dates
+        const chainTransactions = transactionsByChainDate[chainName] || {};
+        let totalTransactions = 0;
+        filteredDates.forEach((date) => {
+          if (chainTransactions[date]) {
+            totalTransactions += chainTransactions[date].value || 0;
           }
+        });
 
-          return {
-            chainName,
-            chainLogo,
-            chainVertical,
-            chainFramework,
-            chainDA,
-            chainSettlement,
-            currentTvl,
-            totalTransactions,
-            totalActiveAccounts,
-            currentTps, // Added Current TPS
-          };
-        })
-        //.filter((chain) => chain !== null) // Remove null entries (now unnecessary)
-        .sort((a, b) => b.currentTvl - a.currentTvl)
-    ); // Sort by TVL descending
-    //.slice(0, 10) // Remove this line to include all chains
+        // Total Active Accounts within filtered dates
+        const chainAccounts = activeAccountsByChainDate[chainName] || {};
+        let totalActiveAccounts = 0;
+        filteredDates.forEach((date) => {
+          if (chainAccounts[date]) {
+            totalActiveAccounts += chainAccounts[date] || 0;
+          }
+        });
+
+        // Current TPS within filtered dates
+        const chainTpsData = tpsDataByChainDate[chainName] || {};
+        let currentTps = 0;
+        const relevantTpsDates = filteredDates.filter(
+          (date) => chainTpsData[date]
+        );
+        if (relevantTpsDates.length > 0) {
+          const latestTpsDate = relevantTpsDates.reduce((a, b) =>
+            moment(a).isAfter(b) ? a : b
+          );
+          currentTps = chainTpsData[latestTpsDate] || 0;
+        }
+
+        // Chain Status
+        const chainStatus =
+          selectedRaas.toLowerCase() === "gelato"
+            ? chain.status && chain.status.trim().toLowerCase() !== "mainnet"
+              ? "Testnet"
+              : "Mainnet"
+            : "Mainnet"; // For non-Gelato RaaS, only Mainnet is included
+
+        return {
+          chainName,
+          chainLogo,
+          chainVertical,
+          chainFramework,
+          chainDA,
+          currentTvl,
+          totalTransactions,
+          totalActiveAccounts,
+          currentTps,
+          chainStatus, // Added Chain Status
+        };
+      })
+      .sort((a, b) => b.currentTvl - a.currentTvl);
   }, [
     filteredChains,
     tvlDataByChainDate,
     transactionsByChainDate,
     activeAccountsByChainDate,
-    tpsDataByChainDate, // Added dependency
+    tpsDataByChainDate,
+    selectedRaas,
+    filteredDates,
   ]);
 
   // Activity Charts Data
   const activityChartData = useMemo(() => {
-    const dates = getFilteredDates();
+    const dates = filteredDates;
 
     // Initialize datasets
     const transactionDatasets = [];
@@ -621,11 +649,10 @@ const RaaSPage = () => {
     tvlDataByChainDate,
     chartView,
     chartType,
-    timeRange,
-    timeUnit,
+    filteredDates,
   ]);
 
-  // Ecosystem Charts Data (remains the same)
+  // Ecosystem Charts Data
   const ecosystemChartData = useMemo(() => {
     // Chain by Vertical
     const verticalCounts = {};
@@ -679,11 +706,6 @@ const RaaSPage = () => {
     };
   }, [filteredChains]);
 
-  // Handle X-Axis Option Change
-  const handleXAxisOptionChange = (event) => {
-    setXAxisOption(event.target.value);
-  };
-
   // Handle Time Unit Change
   const handleTimeUnitChange = (unit) => {
     setTimeUnit(unit);
@@ -707,24 +729,35 @@ const RaaSPage = () => {
   };
 
   // Utility functions
+  const getColorByIndex = (index) => {
+    const COLORS = [
+      "#FF6384",
+      "#36A2EB",
+      "#FFCE56",
+      "#4BC0C0",
+      "#9966FF",
+      "#FF9F40",
+      "#C9CBCF",
+      "#E7E9ED",
+      "#7CB342",
+      "#D32F2F",
+      "#F06292",
+      "#BA68C8",
+      "#4DD0E1",
+      "#9575CD",
+      "#7986CB",
+      "#81C784",
+      "#AED581",
+      "#FF8A65",
+      "#A1887F",
+      "#90A4AE",
+      // Add more colors if needed
+    ];
+    return COLORS[index % COLORS.length];
+  };
+
   const getColorForChain = (chainName) => {
-    const colorMap = {
-      Playnance: "#FF6384",
-      Anomaly: "#36A2EB",
-      "Aleph Zero": "#FFCE56",
-      Everclear: "#4BC0C0",
-      Fox: "#9966FF",
-      Ethernity: "#FF9F40",
-      Camp: "#C9CBCF",
-      Gameswift: "#E7E9ED",
-      "SX Network": "#36A2EB",
-      "Event Horizon": "#FF6384",
-      Arenaz: "#FFCE56",
-      "Edu Chain": "#4BC0C0",
-      Caldera: "#EC6731",
-      Other: "#999999",
-    };
-    return colorMap[chainName] || getRandomColor();
+    return chainColorMap[chainName] || getRandomColor();
   };
 
   const getRandomColor = () => {
@@ -809,11 +842,11 @@ const RaaSPage = () => {
               </div>
               <div className="stats-card">
                 <h3>Total Transactions</h3>
-                <p>${abbreviateNumber(totalTransactions, 2)}</p>
+                <p>{abbreviateNumber(totalTransactions, 2)}</p>
               </div>
               <div className="stats-card">
                 <h3>Total Active Accounts</h3>
-                <p>${abbreviateNumber(totalActiveAccounts, 2)}</p>
+                <p>{abbreviateNumber(totalActiveAccounts, 2)}</p>
               </div>
               <div className="stats-card">
                 <h3>Total TVL</h3>
@@ -928,9 +961,10 @@ const RaaSPage = () => {
                       <th>Name</th>
                       <th>Vertical</th>
                       <th>TVL</th>
-                      <th>Tx Count</th>
+                      <th>Tx Count ({getPeriodLabel()})</th>
                       <th>Active Accounts</th>
                       <th>Current TPS</th>
+                      {/* Removed Status Column */}
                     </tr>
                   </thead>
 
@@ -955,6 +989,11 @@ const RaaSPage = () => {
                             <span className="chain-name">
                               {chain.chainName}
                             </span>
+
+                            {/* Display "Testnet" in bold if applicable */}
+                            {chain.chainStatus === "Testnet" && (
+                              <strong className="testnet-label">Testnet</strong>
+                            )}
 
                             {/* Framework with Small Logo */}
                             <span className="chain-framework">
@@ -981,28 +1020,16 @@ const RaaSPage = () => {
                                 />
                               )}
                             </span>
-
-                            {/* Settlement with Small Logo (Optional) */}
-                            {chain.chainSettlement && (
-                              <span className="chain-settlement">
-                                Settlement: {chain.chainSettlement}
-                                <img
-                                  src={getSettlementLogo(chain.chainSettlement)}
-                                  alt={chain.chainSettlement}
-                                  className="small-logo"
-                                  title={chain.chainSettlement}
-                                />
-                              </span>
-                            )}
                           </div>
                         </td>
                         <td>{chain.chainVertical}</td>
                         <td>${abbreviateNumber(chain.currentTvl, 2)}</td>
-                        <td>${abbreviateNumber(chain.totalTransactions, 2)}</td>
+                        <td>{abbreviateNumber(chain.totalTransactions, 2)}</td>
                         <td>
-                          ${abbreviateNumber(chain.totalActiveAccounts, 2)}
+                          {abbreviateNumber(chain.totalActiveAccounts, 2)}
                         </td>
                         <td>{chain.currentTps.toFixed(2)}</td>
+                        {/* Removed Status Cell */}
                       </tr>
                     ))}
                   </tbody>
@@ -1205,7 +1232,7 @@ const RaaSPage = () => {
                         },
                         title: {
                           display: true,
-                          text: `Average TPS Over Time - ${timeRange}`,
+                          text: `Average TPS Over Time - ${getPeriodLabel()}`,
                           color: "#FFFFFF",
                         },
                         tooltip: {

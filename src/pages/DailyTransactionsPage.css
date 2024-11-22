@@ -272,6 +272,8 @@ tr:hover {
   border-radius: 8px;
   min-width: 300px;
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+  border: none !important; /* Remove any existing borders */
+  box-shadow: none !important;
 }
 
 .pie-chart-card h4 {
@@ -282,6 +284,8 @@ tr:hover {
 
 .pie-chart-card canvas {
   max-width: 100%;
+  border: none !important; /* Remove any existing borders */
+  box-shadow: none !important;
   height: auto;
 }
 
