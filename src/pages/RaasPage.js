@@ -1,5 +1,3 @@
-// src/pages/RaaSPage.js
-
 import React, { useState, useEffect, useMemo } from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -29,6 +27,7 @@ import {
 } from "../services/googleSheetService";
 import moment from "moment";
 import { saveData, getData, clearAllData } from "../services/indexedDBService";
+import { abbreviateNumber, formatNumber } from "../utils/numberFormatter";
 
 // DA Logos
 import EthereumDALogo from "../assets/logos/da/ethereum.png";
@@ -58,23 +57,6 @@ ChartJS.register(
 );
 
 // Custom Number Formatter
-const abbreviateNumber = (number, decimals = 2) => {
-  if (number === null || number === undefined || isNaN(number)) return "0";
-
-  const absNumber = Math.abs(number);
-
-  if (absNumber >= 1.0e8) {
-    // For numbers >= 100,000,000 → Million (scaled by 100,000,000)
-    return (number / 1.0e8).toFixed(decimals) + "M";
-  }
-
-  if (absNumber >= 1.0e5) {
-    // For numbers >= 100,000 → Thousand (scaled by 100,000)
-    return (number / 1.0e5).toFixed(decimals) + "K";
-  }
-
-  return number.toLocaleString(); // Formats number with commas
-};
 
 // DA Logos Mapping
 const daLogoMap = {
@@ -117,7 +99,6 @@ const RaaSPage = () => {
   const [loading, setLoading] = useState(true);
 
   // State Variables for Time Range Selector
-  const [timeUnit, setTimeUnit] = useState("Daily"); // "Daily" or "Monthly"
   const [timeRange, setTimeRange] = useState("All"); // Default time range is "All"
 
   // Chart View Options
@@ -126,10 +107,15 @@ const RaaSPage = () => {
 
   const raasOptions = ["Gelato", "Caldera", "Conduit", "Altlayer", "Alchemy"];
 
-  const timeRangeOptions = {
-    Daily: ["Daily", "90 days", "180 days", "1 Year", "All"],
-    Monthly: ["3 Months", "6 Months", "1 Year", "All"],
-  };
+  const timeRangeOptions = [
+    "Daily",
+    "7 days",
+    "30 days",
+    "90 days",
+    "180 days",
+    "1 Year",
+    "All",
+  ];
 
   // DA and Framework Options (for filters)
   const [selectedVertical, setSelectedVertical] = useState("All Verticals");
@@ -161,7 +147,9 @@ const RaaSPage = () => {
         console.log("🚀 Fetching new data from Google Sheets and APIs...");
         // Fetch new data if no valid stored data is available
         const sheetData = await fetchGoogleSheetData();
+        console.log("sheetData", sheetData);
         const transactionsData = await fetchAllTransaction(sheetData);
+        console.log("transactionsData", transactionsData);
         const activeAccountsData = await fetchAllActiveAccounts(sheetData);
         const tpsData = await fetchAllTpsData(sheetData);
         const tvlData = await fetchAllTvlData(sheetData);
@@ -288,16 +276,43 @@ const RaaSPage = () => {
     selectedLayer,
   ]);
 
-  // Get filtered dates based on timeUnit and timeRange
+  // Function moved above useMemo to avoid ReferenceError
+  const findMostRecentNonApproximateDate = () => {
+    let currentDate = moment().subtract(1, "day");
+    while (currentDate.isAfter(moment().subtract(30, "days"))) {
+      const dateStr = currentDate.format("YYYY-MM-DD");
+      const isApproximate = Object.values(transactionsByChainDate).some(
+        (chainData) => chainData[dateStr]?.is_approximate
+      );
+      if (!isApproximate) {
+        return dateStr;
+      }
+      currentDate.subtract(1, "day");
+    }
+    return null;
+  };
+
+  // Get filtered dates based on timeRange
   const filteredDates = useMemo(() => {
     const today = moment().endOf("day");
     let startDate;
+    let endDate = today;
 
     switch (timeRange) {
       case "Daily":
-        // For Daily, get the most recent date
-        startDate = moment().subtract(1, "day").format("YYYY-MM-DD");
+        // For Daily, get the most recent non-approximate date
+        startDate = findMostRecentNonApproximateDate();
+        if (!startDate) {
+          console.warn("No non-approximate data found in the last 30 days.");
+          return [];
+        }
         return [startDate];
+      case "7 days":
+        startDate = moment().subtract(7, "days").startOf("day");
+        break;
+      case "30 days":
+        startDate = moment().subtract(30, "days").startOf("day");
+        break;
       case "90 days":
         startDate = moment().subtract(90, "days").startOf("day");
         break;
@@ -306,12 +321,6 @@ const RaaSPage = () => {
         break;
       case "1 Year":
         startDate = moment().subtract(1, "year").startOf("day");
-        break;
-      case "3 Months":
-        startDate = moment().subtract(3, "months").startOf("day");
-        break;
-      case "6 Months":
-        startDate = moment().subtract(6, "months").startOf("day");
         break;
       case "All":
         // Find the earliest launch date among the filtered chains
@@ -330,12 +339,12 @@ const RaaSPage = () => {
 
     const dates = [];
     let currentDate = moment(startDate);
-    while (currentDate.isSameOrBefore(today, "day")) {
+    while (currentDate.isSameOrBefore(endDate, "day")) {
       dates.push(currentDate.format("YYYY-MM-DD"));
-      currentDate.add(1, timeUnit === "Daily" ? "day" : "month");
+      currentDate.add(1, "day");
     }
     return dates;
-  }, [timeRange, timeUnit, filteredChains]);
+  }, [timeRange, filteredChains, transactionsByChainDate]);
 
   // Statistics Calculations
 
@@ -347,7 +356,10 @@ const RaaSPage = () => {
       const chainName = chain.name;
       const chainTransactions = transactionsByChainDate[chainName] || {};
       filteredDates.forEach((date) => {
-        if (chainTransactions[date]) {
+        if (
+          chainTransactions[date] &&
+          !chainTransactions[date].is_approximate
+        ) {
           total += chainTransactions[date].value || 0;
         }
       });
@@ -410,14 +422,23 @@ const RaaSPage = () => {
 
   // Helper function to get period label
   const getPeriodLabel = () => {
-    if (timeRange === "Daily") {
-      return "Yesterday";
-    } else if (timeUnit === "Daily") {
-      return timeRange;
-    } else if (timeUnit === "Monthly") {
-      return timeRange;
-    } else {
-      return "Selected Period";
+    switch (timeRange) {
+      case "Daily":
+        return "Yesterday";
+      case "7 days":
+        return "Last 7 days";
+      case "30 days":
+        return "Last 30 days";
+      case "90 days":
+        return "Last 90 days";
+      case "180 days":
+        return "Last 180 days";
+      case "1 Year":
+        return "Last Year";
+      case "All":
+        return "All Time";
+      default:
+        return "Selected Period";
     }
   };
 
@@ -460,7 +481,10 @@ const RaaSPage = () => {
         const chainTransactions = transactionsByChainDate[chainName] || {};
         let totalTransactions = 0;
         filteredDates.forEach((date) => {
-          if (chainTransactions[date]) {
+          if (
+            chainTransactions[date] &&
+            !chainTransactions[date].is_approximate
+          ) {
             totalTransactions += chainTransactions[date].value || 0;
           }
         });
@@ -535,7 +559,12 @@ const RaaSPage = () => {
         filteredChains.forEach((chain) => {
           const chainName = chain.name;
           const chainTransactions = transactionsByChainDate[chainName] || {};
-          total += chainTransactions[date]?.value || 0;
+          if (
+            chainTransactions[date] &&
+            !chainTransactions[date].is_approximate
+          ) {
+            total += chainTransactions[date]?.value || 0;
+          }
         });
         return total;
       });
@@ -595,7 +624,10 @@ const RaaSPage = () => {
         // Transactions
         const transactionData = dates.map((date) => {
           const chainTransactions = transactionsByChainDate[chainName] || {};
-          return chainTransactions[date]?.value || 0;
+          return chainTransactions[date] &&
+            !chainTransactions[date].is_approximate
+            ? chainTransactions[date]?.value || 0
+            : 0;
         });
         transactionDatasets.push({
           label: chainName,
@@ -706,13 +738,6 @@ const RaaSPage = () => {
     };
   }, [filteredChains]);
 
-  // Handle Time Unit Change
-  const handleTimeUnitChange = (unit) => {
-    setTimeUnit(unit);
-    // Reset timeRange to default when timeUnit changes
-    setTimeRange(timeRangeOptions[unit][0]);
-  };
-
   // Handle Time Range Change
   const handleTimeRangeChange = (range) => {
     setTimeRange(range);
@@ -810,28 +835,15 @@ const RaaSPage = () => {
           <>
             {/* Time Range Selector */}
             <div className="time-range-selector">
-              <div className="time-range-left">
-                {["Daily", "Monthly"].map((unit) => (
-                  <button
-                    key={unit}
-                    className={timeUnit === unit ? "active" : ""}
-                    onClick={() => handleTimeUnitChange(unit)}
-                  >
-                    {unit}
-                  </button>
-                ))}
-              </div>
-              <div className="time-range-right">
-                {timeRangeOptions[timeUnit].map((range) => (
-                  <button
-                    key={range}
-                    className={timeRange === range ? "active" : ""}
-                    onClick={() => handleTimeRangeChange(range)}
-                  >
-                    {range}
-                  </button>
-                ))}
-              </div>
+              {timeRangeOptions.map((range) => (
+                <button
+                  key={range}
+                  className={timeRange === range ? "active" : ""}
+                  onClick={() => handleTimeRangeChange(range)}
+                >
+                  {range}
+                </button>
+              ))}
             </div>
 
             {/* Statistics Cards */}
@@ -1067,9 +1079,7 @@ const RaaSPage = () => {
                   <Line
                     data={{
                       labels: activityChartData.dates.map((date) =>
-                        timeUnit === "Daily"
-                          ? moment(date).format("D MMM")
-                          : moment(date).format("MMM YYYY")
+                        moment(date).format("D MMM")
                       ),
                       datasets: activityChartData.transactionDatasets,
                     }}
@@ -1110,9 +1120,7 @@ const RaaSPage = () => {
                   <Line
                     data={{
                       labels: activityChartData.dates.map((date) =>
-                        timeUnit === "Daily"
-                          ? moment(date).format("D MMM")
-                          : moment(date).format("MMM YYYY")
+                        moment(date).format("D MMM")
                       ),
                       datasets: activityChartData.activeAccountsDatasets,
                     }}
@@ -1153,9 +1161,7 @@ const RaaSPage = () => {
                   <Line
                     data={{
                       labels: activityChartData.dates.map((date) =>
-                        timeUnit === "Daily"
-                          ? moment(date).format("D MMM")
-                          : moment(date).format("MMM YYYY")
+                        moment(date).format("D MMM")
                       ),
                       datasets: activityChartData.tvlDatasets,
                     }}
@@ -1196,9 +1202,7 @@ const RaaSPage = () => {
                   <Line
                     data={{
                       labels: activityChartData.dates.map((date) =>
-                        timeUnit === "Daily"
-                          ? moment(date).format("D MMM")
-                          : moment(date).format("MMM YYYY")
+                        moment(date).format("D MMM")
                       ),
                       datasets: [
                         {
@@ -1260,7 +1264,7 @@ const RaaSPage = () => {
                         x: {
                           title: {
                             display: true,
-                            text: timeUnit === "Daily" ? "Date" : "Month",
+                            text: "Date",
                             color: "#FFFFFF",
                           },
                           ticks: {
