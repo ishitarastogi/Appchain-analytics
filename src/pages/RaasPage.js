@@ -39,8 +39,9 @@ import OPStackLogo from "../assets/logos/framework/op.png";
 import OrbitLogo from "../assets/logos/framework/arbitrums.png";
 import PolygonLogo from "../assets/logos/framework/Polygon.jpeg";
 import NovaLogo from "../assets/logos/framework/Nova.png";
+import { abbreviateNumber, formatNumber } from "../utils/numberFormatter";
 
-const abbreviateNumber = (number, decimals = 2) => {
+const abbreviateNumbers = (number, decimals = 2) => {
   if (number === null || number === undefined || isNaN(number)) return "0";
 
   const absNumber = Math.abs(number);
@@ -879,7 +880,7 @@ const RaaSPage = () => {
               </div>
               <div className="stats-card">
                 <h3>Total TVL</h3>
-                <p>${abbreviateNumber(totalTVL, 2)}</p>
+                <p>${abbreviateNumbers(totalTVL, 2)}</p>
               </div>
               <div className="stats-card">
                 <h3>Average TPS</h3>
@@ -1052,7 +1053,7 @@ const RaaSPage = () => {
                           </div>
                         </td>
                         <td>{chain.chainVertical}</td>
-                        <td>${abbreviateNumber(chain.currentTvl, 2)}</td>
+                        <td>${abbreviateNumbers(chain.currentTvl, 2)}</td>
                         <td>{abbreviateNumber(chain.totalTransactions, 2)}</td>
                         <td>
                           {abbreviateNumber(chain.totalActiveAccounts, 2)}
