@@ -27,7 +27,6 @@ import {
 } from "../services/googleSheetService";
 import moment from "moment";
 import { saveData, getData, clearAllData } from "../services/indexedDBService";
-import { abbreviateNumber, formatNumber } from "../utils/numberFormatter";
 
 // DA Logos
 import EthereumDALogo from "../assets/logos/da/ethereum.png";
@@ -40,6 +39,24 @@ import OPStackLogo from "../assets/logos/framework/op.png";
 import OrbitLogo from "../assets/logos/framework/arbitrums.png";
 import PolygonLogo from "../assets/logos/framework/Polygon.jpeg";
 import NovaLogo from "../assets/logos/framework/Nova.png";
+
+const abbreviateNumber = (number, decimals = 2) => {
+  if (number === null || number === undefined || isNaN(number)) return "0";
+
+  const absNumber = Math.abs(number);
+
+  if (absNumber >= 1.0e8) {
+    // For numbers >= 100,000,000 → Million (scaled by 100,000,000)
+    return (number / 1.0e8).toFixed(decimals) + "M";
+  }
+
+  if (absNumber >= 1.0e5) {
+    // For numbers >= 100,000 → Thousand (scaled by 100,000)
+    return (number / 1.0e5).toFixed(decimals) + "K";
+  }
+
+  return number.toLocaleString(); // Formats number with commas
+};
 
 // Register required components for Chart.js
 ChartJS.register(
@@ -128,7 +145,7 @@ const RaaSPage = () => {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
-      // await clearAllData();
+      await clearAllData();
       try {
         // Retrieve data from IndexedDB
         console.log("🔍 Attempting to retrieve data from IndexedDB...");

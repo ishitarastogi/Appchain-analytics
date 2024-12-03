@@ -1,6 +1,13 @@
 // src/pages/ActiveAccountsPage.js
 
-import React, { useState, useEffect } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useCallback,
+  lazy,
+  Suspense,
+} from "react";
 import Sidebar from "../Sidebar/Sidebar";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faUsers, faSort } from "@fortawesome/free-solid-svg-icons";
@@ -17,7 +24,6 @@ import {
   Filler,
   ArcElement,
 } from "chart.js";
-import { Line, Pie } from "react-chartjs-2";
 import {
   fetchGoogleSheetData,
   fetchAllActiveAccounts,
@@ -39,6 +45,14 @@ ChartJS.register(
   ArcElement
 );
 
+// Lazy load Line and Pie components
+const Line = lazy(() =>
+  import("react-chartjs-2").then((module) => ({ default: module.Line }))
+);
+const Pie = lazy(() =>
+  import("react-chartjs-2").then((module) => ({ default: module.Pie }))
+);
+
 const ACTIVE_ACCOUNTS_DATA_ID = "activeAccountsData"; // Unique ID for IndexedDB
 const SIX_HOURS_IN_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
 
@@ -52,13 +66,10 @@ const ActiveAccountsPage = () => {
   const [activeAccountsByChainDate, setActiveAccountsByChainDate] = useState(
     {}
   );
-  const [chartData, setChartData] = useState(null);
-  const [topChainsList, setTopChainsList] = useState([]);
-  const [activeAccountsByRaas, setActiveAccountsByRaas] = useState({});
-  const [tableData, setTableData] = useState([]);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [chainColorMap, setChainColorMap] = useState({}); // State for chain colors
+  const [sortOrder, setSortOrder] = useState("desc"); // 'asc' or 'desc'
 
   const raasOptions = [
     "All Raas",
@@ -74,187 +85,97 @@ const ActiveAccountsPage = () => {
     Monthly: ["3 Months", "6 Months", "1 Year", "All"],
   };
 
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // await clearAllData(); // Clear all data in IndexedDB (Uncomment if needed)
+  // Utility functions
+  const COLORS = [
+    "#FF6384",
+    "#36A2EB",
+    "#FFCE56",
+    "#4BC0C0",
+    "#9966FF",
+    "#FF9F40",
+    "#C9CBCF",
+    "#E7E9ED",
+    "#7CB342",
+    "#D32F2F",
+    "#F06292",
+    "#BA68C8",
+    "#4DD0E1",
+    "#9575CD",
+    "#7986CB",
+    "#81C784",
+    "#AED581",
+    "#FF8A65",
+    "#A1887F",
+    "#90A4AE",
+    // Add more colors if needed
+  ];
 
-        const storedRecord = await getData(ACTIVE_ACCOUNTS_DATA_ID);
+  const getColorByIndex = useCallback(
+    (index) => COLORS[index % COLORS.length],
+    []
+  );
 
-        const sixHoursAgo = Date.now() - SIX_HOURS_IN_MS;
+  const getColorForChain = useCallback(
+    (chainName) => {
+      return chainColorMap[chainName] || "#000000"; // default to black if not found
+    },
+    [chainColorMap]
+  );
 
-        if (storedRecord && storedRecord.timestamp > sixHoursAgo) {
-          // Use stored data if it's less than 6 hours old
-          populateStateWithData(storedRecord.data);
-          setLoading(false);
-          return;
-        }
-
-        // Fetch new data if no valid stored data is available
-        const sheetData = await fetchGoogleSheetData();
-        const activeAccountsData = await fetchAllActiveAccounts(sheetData);
-
-        const newData = {
-          sheetData,
-          activeAccountsData,
-        };
-
-        // Save new data to IndexedDB
-        await saveData(ACTIVE_ACCOUNTS_DATA_ID, newData);
-
-        populateStateWithData(newData);
-      } catch (error) {
-        console.error("Error during data fetching:", error);
-        setError(
-          "Failed to load active accounts data. Please try again later."
-        );
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
+  // Event Handlers with useCallback
+  const handleRaasChange = useCallback((event) => {
+    setSelectedRaas(event.target.value);
   }, []);
 
-  useEffect(() => {
-    if (allChains.length && Object.keys(activeAccountsByChainDate).length) {
-      updateChartData();
-      updateTableData();
-    }
-  }, [
-    allChains,
-    activeAccountsByChainDate,
-    timeUnit,
-    timeRange,
-    selectedRaas,
-    chartType,
-  ]);
-
-  const populateStateWithData = (data) => {
-    const { sheetData, activeAccountsData } = data;
-
-    // Filter chains with status "Mainnet" (if applicable)
-    const mainnetChains = sheetData.filter(
-      (chain) => chain.status && chain.status.trim().toLowerCase() === "mainnet"
-    );
-
-    // If 'status' is not available, use all chains
-    const chainsToUse = mainnetChains.length ? mainnetChains : sheetData;
-
-    setAllChains(chainsToUse);
-    setActiveAccountsByChainDate(activeAccountsData.activeAccountsByChainDate);
-
-    // Initialize chainColorMap
-    const colorMap = {};
-    chainsToUse.forEach((chain, index) => {
-      colorMap[chain.name] = getColorByIndex(index);
-    });
-    setChainColorMap(colorMap);
-  };
-
-  const updateChartData = () => {
-    // Filter chains based on selected RaaS
-    const filteredChains =
-      selectedRaas === "All Raas"
-        ? allChains
-        : allChains.filter(
-            (chain) =>
-              chain.raas &&
-              chain.raas.toLowerCase() === selectedRaas.toLowerCase()
-          );
-
-    // Aggregate data based on the selected time range and unit
-    const dates = timeRange === "1 Day" ? getAllDates() : getFilteredDates(); // Show all dates when "1 Day" is selected
-
-    // Prepare labels and datasets
-    let labels = [];
-    const datasets = [];
-
-    if (timeUnit === "Daily") {
-      labels = dates.map((date) => moment(date).format("D MMM YYYY"));
-    } else {
-      const months = getMonthlyLabels(dates);
-      labels = months.map((month) =>
-        moment(month, "YYYY-MM").format("MMM YYYY")
-      );
-    }
-
-    const chainTotals = filteredChains.map((chain) => {
-      const activeAccountCounts = dates.map(
-        (date) => activeAccountsByChainDate[chain.name]?.[date] || 0
-      );
-      const total = activeAccountCounts.reduce((acc, val) => acc + val, 0);
-      return { name: chain.name, total };
-    });
-
-    chainTotals.sort((a, b) => b.total - a.total);
-    const topChainsList = chainTotals.slice(0, 10);
-    setTopChainsList(topChainsList);
-    const topChainsNames = topChainsList.map((chain) => chain.name);
-
-    const totalActiveAccountsByDate = {};
-
-    topChainsNames.forEach((chainName) => {
-      const chainData = [];
-      if (timeUnit === "Daily") {
-        dates.forEach((date, idx) => {
-          const value = activeAccountsByChainDate[chainName]?.[date] || 0;
-          chainData.push(value);
-
-          // Aggregate total active accounts
-          totalActiveAccountsByDate[date] =
-            (totalActiveAccountsByDate[date] || 0) + value;
-        });
-      } else {
-        const monthlyData = aggregateMonthlyData(
-          activeAccountsByChainDate[chainName] || {},
-          dates
-        );
-        const months = getMonthlyLabels(dates);
-        months.forEach((month) => {
-          const value = monthlyData[month] || 0;
-          chainData.push(value);
-
-          // Aggregate total active accounts
-          totalActiveAccountsByDate[month] =
-            (totalActiveAccountsByDate[month] || 0) + value;
-        });
+  const handleTimeUnitChange = useCallback(
+    (unit) => {
+      setTimeUnit(unit);
+      if (!timeRangeOptions[unit].includes(timeRange)) {
+        setTimeRange(timeRangeOptions[unit][0]);
       }
+    },
+    [timeRange, timeRangeOptions]
+  );
 
-      datasets.push({
-        label: chainName,
-        data: chainData,
-        fill: chartType === "stacked" ? true : false,
-        borderColor: getColorForChain(chainName),
-        backgroundColor: getColorForChain(chainName),
-        hoverBackgroundColor: getColorForChain(chainName), // Match background color
-        hoverBorderColor: getColorForChain(chainName), // Match border color
-        borderWidth: 1, // Consistent border width
-        hoverOffset: 0, // Prevent slice expansion on hover
-        tension: 0.1,
-      });
-    });
+  const handleTimeRangeChange = useCallback((range) => {
+    setTimeRange(range);
+  }, []);
 
-    // Adjust datasets for percentage chart
-    if (chartType === "percentage") {
-      datasets.forEach((dataset) => {
-        dataset.data = dataset.data.map((value, idx) => {
-          const dateKey =
-            timeUnit === "Daily" ? dates[idx] : getMonthlyLabels(dates)[idx];
-          const total = totalActiveAccountsByDate[dateKey] || 1;
-          return ((value / total) * 100).toFixed(2);
-        });
-      });
+  const handleChartTypeChange = useCallback((type) => {
+    setChartType(type);
+  }, []);
+
+  const handleSort = useCallback(() => {
+    setSortOrder((prevSortOrder) => (prevSortOrder === "asc" ? "desc" : "asc"));
+  }, []);
+
+  // Helper Functions
+
+  const getAllDates = useCallback(() => {
+    const today = moment().format("YYYY-MM-DD");
+    // Find the earliest launch date
+    const launchDates = allChains
+      .filter((chain) => chain.launchDate)
+      .map((chain) => moment(new Date(chain.launchDate)).format("YYYY-MM-DD"));
+    let startDate;
+    if (launchDates.length > 0) {
+      startDate = launchDates.reduce((minDate, date) =>
+        date < minDate ? date : minDate
+      );
+    } else {
+      startDate = moment().subtract(1, "year").format("YYYY-MM-DD"); // default to 1 year ago
     }
 
-    setChartData({
-      labels,
-      datasets,
-    });
-  };
+    const dates = [];
+    let currentDate = moment(startDate);
+    while (currentDate.isSameOrBefore(today, "day")) {
+      dates.push(currentDate.format("YYYY-MM-DD"));
+      currentDate.add(1, "day");
+    }
+    return dates;
+  }, [allChains]);
 
-  const getFilteredDates = () => {
+  const getFilteredDates = useCallback(() => {
     const today = moment().format("YYYY-MM-DD");
     let startDate;
     let dateDifference;
@@ -311,42 +232,20 @@ const ActiveAccountsPage = () => {
       currentDate.add(1, "day");
     }
     return dates;
-  };
+  }, [timeRange, allChains, findMostRecentDate]);
 
-  const getAllDates = () => {
-    const today = moment().format("YYYY-MM-DD");
-    // Find the earliest launch date
-    const launchDates = allChains
-      .filter((chain) => chain.launchDate)
-      .map((chain) => moment(new Date(chain.launchDate)).format("YYYY-MM-DD"));
-    let startDate;
-    if (launchDates.length > 0) {
-      startDate = launchDates.reduce((minDate, date) =>
-        date < minDate ? date : minDate
-      );
-    } else {
-      startDate = moment().subtract(1, "year").format("YYYY-MM-DD"); // default to 1 year ago
-    }
+  const findMostRecentDate = useCallback(() => {
+    const datesSet = new Set();
+    Object.values(activeAccountsByChainDate).forEach((chainData) => {
+      Object.keys(chainData).forEach((date) => datesSet.add(date));
+    });
+    const allDates = Array.from(datesSet).sort((a, b) =>
+      moment(b).diff(moment(a))
+    );
+    return allDates[0] || null;
+  }, [activeAccountsByChainDate]);
 
-    const dates = [];
-    let currentDate = moment(startDate);
-    while (currentDate.isSameOrBefore(today, "day")) {
-      dates.push(currentDate.format("YYYY-MM-DD"));
-      currentDate.add(1, "day");
-    }
-    return dates;
-  };
-
-  const findMostRecentDate = () => {
-    let currentDate = moment().subtract(1, "day");
-    while (currentDate.isAfter(moment().subtract(30, "days"))) {
-      const dateStr = currentDate.format("YYYY-MM-DD");
-      return dateStr;
-    }
-    return null;
-  };
-
-  const getMonthlyLabels = (dates) => {
+  const getMonthlyLabels = useCallback((dates) => {
     const months = new Set();
     dates.forEach((date) => {
       months.add(moment(date).format("YYYY-MM"));
@@ -355,9 +254,9 @@ const ActiveAccountsPage = () => {
       moment(a).diff(moment(b))
     );
     return sortedMonths;
-  };
+  }, []);
 
-  const aggregateMonthlyData = (chainData, dates) => {
+  const aggregateMonthlyData = useCallback((chainData, dates) => {
     const monthlyData = {};
     dates.forEach((date) => {
       const monthKey = moment(date).format("YYYY-MM");
@@ -367,9 +266,195 @@ const ActiveAccountsPage = () => {
       monthlyData[monthKey] += chainData[date] || 0;
     });
     return monthlyData;
-  };
+  }, []);
 
-  const updateTableData = () => {
+  const populateStateWithData = useCallback(
+    (data) => {
+      const { sheetData, activeAccountsData } = data;
+
+      // Filter chains with status "Mainnet" (if applicable)
+      const mainnetChains = sheetData.filter(
+        (chain) =>
+          chain.status && chain.status.trim().toLowerCase() === "mainnet"
+      );
+
+      // If 'status' is not available, use all chains
+      const chainsToUse = mainnetChains.length ? mainnetChains : sheetData;
+
+      setAllChains(chainsToUse);
+      setActiveAccountsByChainDate(
+        activeAccountsData.activeAccountsByChainDate
+      );
+
+      // Initialize chainColorMap
+      const colorMap = {};
+      chainsToUse.forEach((chain, index) => {
+        colorMap[chain.name] = getColorByIndex(index);
+      });
+      setChainColorMap(colorMap);
+    },
+    [getColorByIndex]
+  );
+
+  // Data Fetching
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      try {
+        // await clearAllData(); // Clear all data in IndexedDB (Uncomment if needed)
+
+        const storedRecord = await getData(ACTIVE_ACCOUNTS_DATA_ID);
+
+        const sixHoursAgo = Date.now() - SIX_HOURS_IN_MS;
+
+        if (storedRecord && storedRecord.timestamp > sixHoursAgo) {
+          // Use stored data if it's less than 6 hours old
+          populateStateWithData(storedRecord.data);
+          setLoading(false);
+          return;
+        }
+
+        // Fetch new data if no valid stored data is available
+        const sheetData = await fetchGoogleSheetData();
+        const activeAccountsData = await fetchAllActiveAccounts(sheetData);
+
+        const newData = {
+          sheetData,
+          activeAccountsData,
+        };
+
+        // Save new data to IndexedDB
+        await saveData(ACTIVE_ACCOUNTS_DATA_ID, newData);
+
+        populateStateWithData(newData);
+      } catch (error) {
+        console.error("Error during data fetching:", error);
+        setError(
+          "Failed to load active accounts data. Please try again later."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [populateStateWithData]);
+
+  // Memoized Chart Data
+  const chartData = useMemo(() => {
+    if (!allChains.length || !Object.keys(activeAccountsByChainDate).length)
+      return null;
+
+    // Filter chains based on selected RaaS
+    const filteredChains =
+      selectedRaas === "All Raas"
+        ? allChains
+        : allChains.filter(
+            (chain) =>
+              chain.raas &&
+              chain.raas.toLowerCase() === selectedRaas.toLowerCase()
+          );
+
+    // Aggregate data based on the selected time range and unit
+    const dates = timeRange === "1 Day" ? getAllDates() : getFilteredDates();
+
+    if (dates.length === 0) return null;
+
+    // Prepare labels and datasets
+    let labels = [];
+    const datasets = [];
+
+    if (timeUnit === "Daily") {
+      labels = dates.map((date) => moment(date).format("D MMM YYYY"));
+    } else {
+      const months = getMonthlyLabels(dates);
+      labels = months.map((month) =>
+        moment(month, "YYYY-MM").format("MMM YYYY")
+      );
+    }
+
+    // Calculate total active accounts per date for percentage chart
+    const totalActiveAccountsByDate = {};
+
+    const chainDataMap = {};
+
+    filteredChains.forEach((chain) => {
+      const chainName = chain.name;
+      chainDataMap[chainName] = dates.map(
+        (date) => activeAccountsByChainDate[chainName]?.[date] || 0
+      );
+    });
+
+    // Calculate totals
+    filteredChains.forEach((chain) => {
+      const chainName = chain.name;
+      chainDataMap[chainName].forEach((value, idx) => {
+        const dateKey =
+          timeUnit === "Daily" ? dates[idx] : getMonthlyLabels(dates)[idx];
+        totalActiveAccountsByDate[dateKey] =
+          (totalActiveAccountsByDate[dateKey] || 0) + value;
+      });
+    });
+
+    // Sort chains by total active accounts
+    const chainTotals = filteredChains.map((chain) => {
+      const total = chainDataMap[chain.name].reduce((acc, val) => acc + val, 0);
+      return { name: chain.name, total };
+    });
+
+    chainTotals.sort((a, b) => b.total - a.total);
+    const topChainsListMemo = chainTotals.slice(0, 10);
+    const topChainsNames = topChainsListMemo.map((chain) => chain.name);
+
+    // Prepare datasets
+    topChainsNames.forEach((chainName) => {
+      const chainData = chainDataMap[chainName].map((value, idx) => {
+        if (chartType === "percentage") {
+          const dateKey =
+            timeUnit === "Daily" ? dates[idx] : getMonthlyLabels(dates)[idx];
+          const total = totalActiveAccountsByDate[dateKey] || 1;
+          return ((value / total) * 100).toFixed(2);
+        }
+        return value;
+      });
+
+      datasets.push({
+        label: chainName,
+        data: chainData,
+        fill: chartType === "stacked" ? true : false,
+        borderColor: getColorForChain(chainName),
+        backgroundColor: getColorForChain(chainName),
+        hoverBackgroundColor: getColorForChain(chainName), // Match background color
+        hoverBorderColor: getColorForChain(chainName), // Match border color
+        borderWidth: 1, // Consistent border width
+        hoverOffset: 0, // Prevent slice expansion on hover
+        tension: 0.1,
+      });
+    });
+
+    return {
+      labels,
+      datasets,
+    };
+  }, [
+    allChains,
+    activeAccountsByChainDate,
+    timeUnit,
+    timeRange,
+    selectedRaas,
+    chartType,
+    getAllDates,
+    getFilteredDates,
+    getMonthlyLabels,
+    aggregateMonthlyData,
+    getColorForChain,
+  ]);
+
+  // Memoized Table Data
+  const tableData = useMemo(() => {
+    if (!allChains.length || !Object.keys(activeAccountsByChainDate).length)
+      return [];
+
     const today = moment().format("YYYY-MM-DD");
     const yesterday = moment().subtract(1, "day").format("YYYY-MM-DD");
 
@@ -377,7 +462,6 @@ const ActiveAccountsPage = () => {
     let previousPeriodDates = [];
 
     if (timeRange === "1 Day") {
-      // For "1 Day", get the most recent date
       const foundDate = findMostRecentDate();
       if (foundDate) {
         currentPeriodDates = [foundDate];
@@ -385,7 +469,6 @@ const ActiveAccountsPage = () => {
         console.warn("No data found in the last 30 days.");
       }
 
-      // For previous period, find the previous date
       let previousDate = moment(foundDate)
         .subtract(1, "day")
         .format("YYYY-MM-DD");
@@ -393,7 +476,6 @@ const ActiveAccountsPage = () => {
     } else {
       currentPeriodDates = getFilteredDates();
 
-      // Determine the previous time range
       const startDate = currentPeriodDates[0];
       const endDate = currentPeriodDates[currentPeriodDates.length - 1];
       const dateDifference =
@@ -406,7 +488,6 @@ const ActiveAccountsPage = () => {
         .subtract(1, "days")
         .format("YYYY-MM-DD");
 
-      // Generate previous dates
       let currentDate = moment(previousStartDate);
       while (currentDate.isSameOrBefore(previousEndDate)) {
         const dateStr = currentDate.format("YYYY-MM-DD");
@@ -415,42 +496,43 @@ const ActiveAccountsPage = () => {
       }
     }
 
-    let totalActiveAccountsAllChains = 0;
-    let activeAccountsByRaas = {};
-
-    // Determine the dates for activeAccountsByRaas
-    let raasPeriodDates;
-    if (selectedRaas !== "All Raas") {
-      // If a specific RaaS is selected, use "All Time"
-      raasPeriodDates = getAllDates();
-    } else {
-      // Use currentPeriodDates based on selected time range
-      raasPeriodDates = currentPeriodDates;
-    }
-
     // Compute activeAccountsByRaas
-    allChains.forEach((chain) => {
-      const chainName = chain.name;
-      const chainRaas = chain.raas || "N/A";
+    const activeAccountsByRaasMemo = useMemo(() => {
+      const memo = {};
+      allChains.forEach((chain) => {
+        const chainName = chain.name;
+        const chainRaas = chain.raas || "N/A";
 
-      const chainActiveAccounts = activeAccountsByChainDate[chainName] || {};
+        const chainActiveAccounts = activeAccountsByChainDate[chainName] || {};
 
-      // Sum active accounts over raasPeriodDates
-      const totalActiveAccounts = raasPeriodDates.reduce((sum, date) => {
-        const value = chainActiveAccounts[date] || 0;
-        return sum + value;
-      }, 0);
+        const totalActiveAccounts =
+          selectedRaas !== "All Raas"
+            ? getAllDates().reduce(
+                (sum, date) => sum + (chainActiveAccounts[date] || 0),
+                0
+              )
+            : currentPeriodDates.reduce(
+                (sum, date) => sum + (chainActiveAccounts[date] || 0),
+                0
+              );
 
-      // Aggregate active accounts by RaaS
-      if (!activeAccountsByRaas[chainRaas]) {
-        activeAccountsByRaas[chainRaas] = 0;
-      }
-      activeAccountsByRaas[chainRaas] += totalActiveAccounts;
-    });
+        if (!memo[chainRaas]) {
+          memo[chainRaas] = 0;
+        }
+        memo[chainRaas] += totalActiveAccounts;
+      });
+      return memo;
+    }, [
+      allChains,
+      activeAccountsByChainDate,
+      selectedRaas,
+      getAllDates,
+      currentPeriodDates,
+    ]);
 
-    const tableData = [];
+    // Prepare table data
+    const processedTableData = [];
 
-    // Get the filtered chains based on RaaS selection
     const filteredChains =
       selectedRaas === "All Raas"
         ? allChains
@@ -460,7 +542,6 @@ const ActiveAccountsPage = () => {
               chain.raas.toLowerCase() === selectedRaas.toLowerCase()
           );
 
-    // For each chain, compute the required data
     filteredChains.forEach((chain) => {
       const chainName = chain.name;
       const chainLogo = chain.logoUrl || ""; // Corrected to use logoUrl
@@ -471,14 +552,10 @@ const ActiveAccountsPage = () => {
 
       const chainActiveAccounts = activeAccountsByChainDate[chainName] || {};
 
-      // Sum active accounts over current period
       const currentActiveAccounts = currentPeriodDates.reduce((sum, date) => {
         return sum + (chainActiveAccounts[date] || 0);
       }, 0);
 
-      totalActiveAccountsAllChains += currentActiveAccounts;
-
-      // Compute percentage change over last 30 days
       const percentageCurrentPeriodDates = [];
       const percentagePreviousPeriodDates = [];
 
@@ -492,7 +569,6 @@ const ActiveAccountsPage = () => {
         percentagePreviousPeriodDates.push(dateStr);
       }
 
-      // Sum active accounts over percentage periods
       const currentActiveAccountsForPercentage =
         percentageCurrentPeriodDates.reduce((sum, date) => {
           return sum + (chainActiveAccounts[date] || 0);
@@ -503,7 +579,6 @@ const ActiveAccountsPage = () => {
           return sum + (chainActiveAccounts[date] || 0);
         }, 0);
 
-      // Calculate percentage increase over last 30 days
       const percentageIncrease =
         previousActiveAccountsForPercentage > 0
           ? ((currentActiveAccountsForPercentage -
@@ -514,7 +589,7 @@ const ActiveAccountsPage = () => {
           ? 100
           : 0;
 
-      tableData.push({
+      processedTableData.push({
         chainName,
         chainLogo,
         chainVertical,
@@ -526,168 +601,268 @@ const ActiveAccountsPage = () => {
       });
     });
 
-    // Sort on activeAccounts column
-    tableData.sort((a, b) => b.activeAccounts - a.activeAccounts);
+    // Sort the table data based on activeAccounts and sortOrder
+    processedTableData.sort((a, b) => {
+      if (sortOrder === "asc") {
+        return a.activeAccounts - b.activeAccounts;
+      } else {
+        return b.activeAccounts - a.activeAccounts;
+      }
+    });
 
-    // Take top 10 chains
-    const top10TableData = tableData.slice(0, 10);
+    const top10TableData = processedTableData.slice(0, 10);
 
-    // Calculate totalActiveAccountsTopChains
-    const totalActiveAccountsTopChains = top10TableData.reduce(
+    return top10TableData;
+  }, [
+    allChains,
+    activeAccountsByChainDate,
+    timeUnit,
+    timeRange,
+    selectedRaas,
+    getAllDates,
+    getFilteredDates,
+    findMostRecentDate,
+    sortOrder,
+  ]);
+
+  // Calculate totalActiveAccountsAllChains
+  const totalActiveAccountsAllChains = useMemo(() => {
+    return tableData.reduce((sum, chain) => sum + chain.activeAccounts, 0);
+  }, [tableData]);
+
+  // Calculate percentage share
+  const percentageShare = useMemo(() => {
+    const totalActiveAccountsTopChains = tableData.reduce(
       (sum, chain) => sum + chain.activeAccounts,
       0
     );
-
-    setTableData(top10TableData);
-    setActiveAccountsByRaas(activeAccountsByRaas); // Updated activeAccountsByRaas
-  };
-
-  // Event Handlers
-
-  const handleRaasChange = (event) => {
-    setSelectedRaas(event.target.value);
-  };
-
-  const handleTimeUnitChange = (unit) => {
-    setTimeUnit(unit);
-    // Keep the current timeRange unless it's not available
-    if (!timeRangeOptions[unit].includes(timeRange)) {
-      setTimeRange(timeRangeOptions[unit][0]);
-    }
-  };
-
-  const handleTimeRangeChange = (range) => {
-    setTimeRange(range);
-  };
-
-  const handleChartTypeChange = (type) => {
-    setChartType(type);
-  };
-
-  const handleSort = () => {
-    // Reverse the order of tableData
-    setTableData([...tableData.reverse()]);
-  };
-
-  // Utility functions
-  const COLORS = [
-    "#FF6384",
-    "#36A2EB",
-    "#FFCE56",
-    "#4BC0C0",
-    "#9966FF",
-    "#FF9F40",
-    "#C9CBCF",
-    "#E7E9ED",
-    "#7CB342",
-    "#D32F2F",
-    "#F06292",
-    "#BA68C8",
-    "#4DD0E1",
-    "#9575CD",
-    "#7986CB",
-    "#81C784",
-    "#AED581",
-    "#FF8A65",
-    "#A1887F",
-    "#90A4AE",
-    // Add more colors if needed
-  ];
-
-  const getColorByIndex = (index) => COLORS[index % COLORS.length];
-
-  const getColorForChain = (chainName) => {
-    return chainColorMap[chainName] || "#000000"; // default to black if not found
-  };
+    return totalActiveAccountsAllChains
+      ? (
+          (totalActiveAccountsTopChains / totalActiveAccountsAllChains) *
+          100
+        ).toFixed(2)
+      : 0;
+  }, [totalActiveAccountsAllChains, tableData]);
 
   // Format total active accounts
-  const formattedTotalActiveAccounts = abbreviateNumber(
-    tableData.reduce((sum, chain) => sum + chain.activeAccounts, 0),
-    2
-  );
-
-  // Calculate percentage share
-  const totalActiveAccountsAllChains = tableData.reduce(
-    (sum, chain) => sum + chain.activeAccounts,
-    0
-  );
-  const totalActiveAccountsTopChains = tableData.reduce(
-    (sum, chain) => sum + chain.activeAccounts,
-    0
-  );
-  const percentageShare = totalActiveAccountsAllChains
-    ? (
-        (totalActiveAccountsTopChains / totalActiveAccountsAllChains) *
-        100
-      ).toFixed(2)
-    : 0;
+  const formattedTotalActiveAccounts = useMemo(() => {
+    return abbreviateNumber(
+      tableData.reduce((sum, chain) => sum + chain.activeAccounts, 0),
+      2
+    );
+  }, [tableData]);
 
   // Data for RaaS Pie Chart
-  const raasLabels = Object.keys(activeAccountsByRaas);
-  const raasData = raasLabels.map((raas) => activeAccountsByRaas[raas]);
-  const raasColors = raasLabels.map((raas, index) => {
-    const colorMap = {
-      Gelato: "#ff3b57",
-      Conduit: "#46BDC6",
-      Alchemy: "#4185F4",
-      Caldera: "#EC6731",
-      Altlayer: "#B28AFE",
-    };
-    return colorMap[raas] || COLORS[index % COLORS.length];
-  });
+  const raasLabels = useMemo(
+    () => Object.keys(activeAccountsByRaasMemo),
+    [activeAccountsByRaasMemo]
+  );
+  const raasData = useMemo(
+    () => raasLabels.map((raas) => activeAccountsByRaasMemo[raas]),
+    [raasLabels, activeAccountsByRaasMemo]
+  );
+  const raasColors = useMemo(
+    () =>
+      raasLabels.map((raas, index) => {
+        const colorMap = {
+          Gelato: "#ff3b57",
+          Conduit: "#46BDC6",
+          Alchemy: "#4185F4",
+          Caldera: "#EC6731",
+          Altlayer: "#B28AFE",
+          "All Raas": "#CCCCCC",
+        };
+        return colorMap[raas] || COLORS[index % COLORS.length];
+      }),
+    [raasLabels]
+  );
 
-  const raasPieData = {
-    labels: raasLabels,
-    datasets: [
-      {
-        data: raasData,
-        backgroundColor: raasColors,
-        // Set hoverBackgroundColor to match backgroundColor
-        hoverBackgroundColor: raasColors,
-        // Set hoverBorderColor to match borderColor
-        borderColor: "#FFFFFF",
-        hoverBorderColor: "#FFFFFF",
-        borderWidth: 1,
-        hoverOffset: 0,
-      },
-    ],
-  };
+  const raasPieDataFinal = useMemo(
+    () => ({
+      labels: raasLabels,
+      datasets: [
+        {
+          data: raasData,
+          backgroundColor: raasColors,
+          hoverBackgroundColor: raasColors,
+          borderColor: "#FFFFFF",
+          hoverBorderColor: "#FFFFFF",
+          borderWidth: 1,
+          hoverOffset: 0,
+        },
+      ],
+    }),
+    [raasLabels, raasData, raasColors]
+  );
 
   // Data for Top Chains Pie Chart
-  // Include "Other" as the 11th slice
-  const otherChainsTotal =
-    totalActiveAccountsAllChains - totalActiveAccountsTopChains;
-  const topChainsData = topChainsList.map((chain) => chain.total);
-  const topChainsLabels = topChainsList.map((chain) => chain.name);
-  topChainsLabels.push("Other");
-  topChainsData.push(otherChainsTotal);
+  const topChainsPieData = useMemo(() => {
+    const topChainsData = topChainsList.map((chain) => chain.total);
+    const topChainsLabels = topChainsList.map((chain) => chain.name);
+    const otherChainsTotal =
+      totalActiveAccountsAllChains -
+      topChainsData.reduce((sum, val) => sum + val, 0);
+    topChainsLabels.push("Other");
+    topChainsData.push(otherChainsTotal);
 
-  const topChainsPieData = {
-    labels: topChainsLabels,
-    datasets: [
-      {
-        data: topChainsData,
-        backgroundColor: topChainsLabels.map((label, index) =>
-          label === "Other"
-            ? "#999999"
-            : getColorForChain(label) || COLORS[index % COLORS.length]
-        ),
-        // Set hoverBackgroundColor to match backgroundColor
-        hoverBackgroundColor: topChainsLabels.map((label, index) =>
-          label === "Other"
-            ? "#999999"
-            : getColorForChain(label) || COLORS[index % COLORS.length]
-        ),
-        // Set hoverBorderColor to match borderColor
-        borderColor: "#FFFFFF",
-        hoverBorderColor: "#FFFFFF",
-        borderWidth: 1,
-        hoverOffset: 0,
+    return {
+      labels: topChainsLabels,
+      datasets: [
+        {
+          data: topChainsData,
+          backgroundColor: topChainsLabels.map((label, index) =>
+            label === "Other"
+              ? "#999999"
+              : getColorForChain(label) || COLORS[index % COLORS.length]
+          ),
+          hoverBackgroundColor: topChainsLabels.map((label, index) =>
+            label === "Other"
+              ? "#999999"
+              : getColorForChain(label) || COLORS[index % COLORS.length]
+          ),
+          borderColor: "#FFFFFF",
+          hoverBorderColor: "#FFFFFF",
+          borderWidth: 1,
+          hoverOffset: 0,
+        },
+      ],
+    };
+  }, [topChainsList, getColorForChain, totalActiveAccountsAllChains]);
+
+  // Chart Options
+  const lineChartOptions = useMemo(
+    () => ({
+      responsive: true,
+      interaction: {
+        mode: "index",
+        intersect: false,
       },
-    ],
-  };
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: {
+            color: "#FFFFFF",
+          },
+        },
+        title: {
+          display: true,
+          text: `Active Accounts - ${
+            timeRange === "1 Day" ? "All Time" : timeRange
+          }`,
+          color: "#FFFFFF",
+        },
+        tooltip: {
+          mode: "index",
+          intersect: false,
+          callbacks: {
+            title: (context) => context[0].label,
+            label: (context) => {
+              const label = context.dataset.label || "";
+              let value = context.parsed.y;
+              if (chartType === "percentage") {
+                value = `${value}%`;
+              } else {
+                value = abbreviateNumber(value, 2);
+              }
+              return `${label}: ${value}`;
+            },
+          },
+          backgroundColor: "rgba(0,0,0,0.7)",
+          titleColor: "#FFFFFF",
+          bodyColor: "#FFFFFF",
+        },
+      },
+      scales: {
+        x: {
+          title: {
+            display: true,
+            text: timeUnit === "Daily" ? "Date" : "Month",
+            color: "#FFFFFF",
+          },
+          ticks: {
+            color: "#FFFFFF",
+            maxRotation: 45,
+            minRotation: 0,
+            autoSkip: true,
+            maxTicksLimit: 10,
+          },
+        },
+        y: {
+          stacked: chartType === "stacked" || chartType === "percentage",
+          max: chartType === "percentage" ? 100 : undefined,
+          title: {
+            display: true,
+            text:
+              chartType === "percentage"
+                ? "Percentage of Total Active Accounts (%)"
+                : "Number of Active Accounts",
+            color: "#FFFFFF",
+          },
+          ticks: {
+            color: "#FFFFFF",
+            beginAtZero: true,
+            callback: (value) =>
+              chartType === "percentage"
+                ? `${value}%`
+                : abbreviateNumber(value, 2),
+          },
+        },
+      },
+      elements: {
+        point: {
+          radius: 0, // Remove points for smoother lines
+        },
+      },
+      hover: {
+        onHover: (event, chartElement) => {
+          event.native.target.style.cursor = "default"; // Prevent pointer cursor
+        },
+      },
+      animation: {
+        duration: 0, // Disable animations for faster rendering
+      },
+    }),
+    [timeRange, timeUnit, chartType]
+  );
 
-  const getPeriodLabel = () => {
+  const pieChartOptions = useMemo(
+    () => ({
+      plugins: {
+        legend: {
+          position: "right",
+          labels: {
+            color: "#FFFFFF",
+          },
+        },
+        tooltip: {
+          callbacks: {
+            label: (context) => {
+              const label = context.label || "";
+              const value = context.parsed || 0;
+              const totalRaasActiveAccounts = raasData.reduce(
+                (sum, val) => sum + val,
+                0
+              );
+              const percentage = totalRaasActiveAccounts
+                ? ((value / totalRaasActiveAccounts) * 100).toFixed(2)
+                : 0;
+              const formattedValue = abbreviateNumber(value, 2);
+              return `${label}: ${formattedValue} (${percentage}%)`;
+            },
+          },
+        },
+      },
+      hover: {
+        mode: null, // Disable hover interactions if necessary
+      },
+      animation: {
+        duration: 0, // Disable animations for faster rendering
+      },
+    }),
+    [raasData]
+  );
+
+  const getPeriodLabel = useCallback(() => {
     if (timeRange === "1 Day") {
       return "Yesterday";
     } else if (timeUnit === "Daily") {
@@ -697,12 +872,50 @@ const ActiveAccountsPage = () => {
     } else {
       return "Selected Period";
     }
-  };
+  }, [timeRange, timeUnit]);
 
-  const raasPieChartLabel =
-    selectedRaas !== "All Raas"
+  const raasPieChartLabel = useMemo(() => {
+    return selectedRaas !== "All Raas"
       ? "RaaS Providers Market Share (All Time)"
       : `RaaS Providers Market Share (${getPeriodLabel()})`;
+  }, [selectedRaas, getPeriodLabel]);
+
+  // Separate useMemo for activeAccountsByRaas
+  const activeAccountsByRaasMemo = useMemo(() => {
+    const memo = {};
+    allChains.forEach((chain) => {
+      const chainName = chain.name;
+      const chainRaas = chain.raas || "N/A";
+
+      const chainActiveAccounts = activeAccountsByChainDate[chainName] || {};
+
+      const totalActiveAccounts =
+        selectedRaas !== "All Raas"
+          ? getAllDates().reduce(
+              (sum, date) => sum + (chainActiveAccounts[date] || 0),
+              0
+            )
+          : timeRange !== "1 Day"
+          ? getFilteredDates().reduce(
+              (sum, date) => sum + (chainActiveAccounts[date] || 0),
+              0
+            )
+          : 0; // For "1 Day", we handle differently
+
+      if (!memo[chainRaas]) {
+        memo[chainRaas] = 0;
+      }
+      memo[chainRaas] += totalActiveAccounts;
+    });
+    return memo;
+  }, [
+    allChains,
+    activeAccountsByChainDate,
+    selectedRaas,
+    getAllDates,
+    getFilteredDates,
+    timeRange,
+  ]);
 
   return (
     <div className="performance-page">
@@ -806,105 +1019,9 @@ const ActiveAccountsPage = () => {
         {/* Line Chart Section */}
         {!loading && chartData && (
           <div className="line-chart-container">
-            <Line
-              data={chartData}
-              options={{
-                responsive: true,
-                interaction: {
-                  mode: "index",
-                  intersect: false,
-                },
-                plugins: {
-                  legend: {
-                    position: "bottom",
-                    labels: {
-                      color: "#FFFFFF",
-                    },
-                  },
-                  title: {
-                    display: true,
-                    text: `Active Accounts - ${
-                      timeRange === "1 Day" ? "All Time" : timeRange
-                    }`,
-                    color: "#FFFFFF",
-                  },
-                  tooltip: {
-                    mode: "index",
-                    intersect: false,
-                    callbacks: {
-                      title: function (context) {
-                        let dateLabel = context[0].label;
-                        return dateLabel;
-                      },
-                      label: function (context) {
-                        let label = context.dataset.label || "";
-                        let value = context.parsed.y;
-                        if (chartType === "percentage") {
-                          value = value + "%";
-                        } else {
-                          value = abbreviateNumber(value, 2);
-                        }
-                        return `${label}: ${value}`;
-                      },
-                    },
-                    backgroundColor: "rgba(0,0,0,0.7)",
-                    titleColor: "#FFFFFF",
-                    bodyColor: "#FFFFFF",
-                  },
-                },
-                scales: {
-                  x: {
-                    title: {
-                      display: true,
-                      text: timeUnit === "Daily" ? "Date" : "Month",
-                      color: "#FFFFFF",
-                    },
-                    ticks: {
-                      color: "#FFFFFF",
-                      maxRotation: 45,
-                      minRotation: 0,
-                      autoSkip: true,
-                      maxTicksLimit: 10,
-                    },
-                  },
-                  y: {
-                    stacked:
-                      chartType === "stacked" || chartType === "percentage",
-                    max: chartType === "percentage" ? 100 : undefined,
-                    title: {
-                      display: true,
-                      text:
-                        chartType === "percentage"
-                          ? "Percentage of Total Active Accounts (%)"
-                          : "Number of Active Accounts",
-                      color: "#FFFFFF",
-                    },
-                    ticks: {
-                      color: "#FFFFFF",
-                      beginAtZero: true,
-                      callback: function (value) {
-                        return chartType === "percentage"
-                          ? value + "%"
-                          : abbreviateNumber(value, 2);
-                      },
-                    },
-                  },
-                },
-                elements: {
-                  point: {
-                    radius: 0,
-                  },
-                },
-                hover: {
-                  onHover: function (event, chartElement) {
-                    event.native.target.style.cursor = "default"; // Prevent pointer cursor
-                  },
-                },
-                animation: {
-                  duration: 0, // Disable animations to prevent color changes
-                },
-              }}
-            />
+            <Suspense fallback={<div>Loading Chart...</div>}>
+              <Line data={chartData} options={lineChartOptions} />
+            </Suspense>
           </div>
         )}
 
@@ -981,80 +1098,18 @@ const ActiveAccountsPage = () => {
               <div className="pie-chart-card">
                 <h4>Top 10 Chains Market Share ({getPeriodLabel()})</h4>
                 {topChainsPieData && (
-                  <Pie
-                    data={topChainsPieData}
-                    options={{
-                      plugins: {
-                        legend: {
-                          position: "right",
-                          labels: {
-                            color: "#FFFFFF",
-                          },
-                        },
-                        tooltip: {
-                          callbacks: {
-                            label: function (context) {
-                              const label = context.label || "";
-                              const value = context.parsed || 0;
-                              const percentage = totalActiveAccountsAllChains
-                                ? (
-                                    (value / totalActiveAccountsAllChains) *
-                                    100
-                                  ).toFixed(2)
-                                : 0;
-                              const formattedValue = abbreviateNumber(value, 2);
-                              return `${label}: ${formattedValue} (${percentage}%)`;
-                            },
-                          },
-                        },
-                      },
-                      hover: {
-                        mode: null, // Disable hover interactions if necessary
-                      },
-                    }}
-                  />
+                  <Suspense fallback={<div>Loading Pie Chart...</div>}>
+                    <Pie data={topChainsPieData} options={pieChartOptions} />
+                  </Suspense>
                 )}
               </div>
               {/* RaaS Pie Chart */}
               <div className="pie-chart-card">
                 <h4>{raasPieChartLabel}</h4>
-                {raasPieData && (
-                  <Pie
-                    data={raasPieData}
-                    options={{
-                      plugins: {
-                        legend: {
-                          position: "right",
-                          labels: {
-                            color: "#FFFFFF",
-                          },
-                        },
-                        tooltip: {
-                          callbacks: {
-                            label: function (context) {
-                              const label = context.label || "";
-                              const value = context.parsed || 0;
-                              const totalRaasActiveAccounts = raasData.reduce(
-                                (sum, val) => sum + val,
-                                0
-                              );
-                              const percentage = totalRaasActiveAccounts
-                                ? (
-                                    (value / totalRaasActiveAccounts) *
-                                    100
-                                  ).toFixed(2)
-                                : 0;
-                              const formattedValue = abbreviateNumber(value, 2);
-                              return `${label}: ${formattedValue} (${percentage}%)`;
-                            },
-                          },
-                        },
-                      },
-                      hover: {
-                        mode: null, // Disable hover interactions if necessary
-                      },
-                    }}
-                  />
+                {raasPieDataFinal && (
+                  <Suspense fallback={<div>Loading Pie Chart...</div>}>
+                    <Pie data={raasPieDataFinal} options={pieChartOptions} />
+                  </Suspense>
                 )}
               </div>
             </div>
