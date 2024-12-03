@@ -13,6 +13,7 @@ import {
   fetchAllActiveAccounts,
 } from "../services/googleSheetService";
 import { saveData, getData, clearAllData } from "../services/indexedDBService";
+import { abbreviateNumber, formatNumber } from "../utils/numberFormatter";
 
 // Register required components for Chart.js
 import {
@@ -33,7 +34,6 @@ ChartJS.register(
   LinearScale,
   BarElement
 );
-import { abbreviateNumber, formatNumber } from "../utils/numberFormatter";
 
 const ECOSYSTEM_DATA_ID = "ecosystemData"; // Ensure consistent casing
 const SIX_HOURS_IN_MS = 6 * 60 * 60 * 1000; // 6 hours in milliseconds
