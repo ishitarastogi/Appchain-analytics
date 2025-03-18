@@ -5,7 +5,7 @@ import moment from "moment";
 
 // Fetch Google Sheets Data
 export const fetchGoogleSheetData = async () => {
-  const GOOGLE_SHEET_URL = `https://sheets.googleapis.com/v4/spreadsheets/1z-wz6qNOb2Zs7d3xnPjhl004YhIuov-ecd60JzffaNM/values/Sheet1!A2:Z1000?key=${process.env.REACT_APP_GOOGLE_SHEETS_API_KEY}`;
+  const GOOGLE_SHEET_URL = "https://sheets.googleapis.com/v4/spreadsheets/1hNm4OdwVPSsDryrxdxseKIxKRETQ8uMiBg4oWIgWHFg/values/Sheet1?key=AIzaSyBi8VdGKrbHsnQzoRHm2-5vaAi4HnvognE";
 
   try {
     const response = await axios.get(GOOGLE_SHEET_URL);
